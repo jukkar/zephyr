@@ -161,6 +161,9 @@ static enum net_verdict ethernet_recv(struct net_if *iface,
 		family = AF_UNSPEC;
 		break;
 #endif
+	case NET_ETH_PTYPE_LLDP:
+		NET_DBG("LLDP Rx agent not implemented");
+		return NET_DROP;
 	default:
 		NET_DBG("Unknown hdr type 0x%04x iface %p", type, iface);
 		return NET_DROP;
@@ -398,6 +401,11 @@ static enum net_verdict ethernet_send(struct net_if *iface,
 	struct ethernet_context *ctx = net_if_l2_data(iface);
 	u16_t ptype;
 
+	/* If this is a LLDP packet, we do not touch it further and send it. */
+	if (ntohs(hdr->type) == NET_ETH_PTYPE_LLDP) {
+		goto send;
+	}
+
 #ifdef CONFIG_NET_ARP
 	if (net_pkt_family(pkt) == AF_INET) {
 		struct net_pkt *arp_pkt;
@@ -516,10 +524,7 @@ setup_hdr:
 			    net_pkt_ll_src(pkt)->addr,
 			    net_pkt_ll_dst(pkt)->addr);
 
-#ifdef CONFIG_NET_ARP
 send:
-#endif /* CONFIG_NET_ARP */
-
 	net_if_queue_tx(iface, pkt);
 
 	return NET_OK;
