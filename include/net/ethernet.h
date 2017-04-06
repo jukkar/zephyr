@@ -19,6 +19,7 @@
 
 #include <net/net_ip.h>
 #include <net/net_pkt.h>
+#include <net/lldp.h>
 #include <misc/util.h>
 #include <net/net_if.h>
 #include <net/ethernet_vlan.h>
@@ -189,6 +190,11 @@ struct ethernet_context {
 		 */
 		struct net_if *iface;
 	} carrier_mgmt;
+
+#if defined(CONFIG_NET_LLDP)
+	/** LLDP information element related to this network interface */
+	const struct net_lldpdu *lldpdu;
+#endif
 
 #if defined(CONFIG_NET_GPTP)
 	/** The gPTP port number for this network device. We need to store the
