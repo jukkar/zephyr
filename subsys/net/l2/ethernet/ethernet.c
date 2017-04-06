@@ -16,6 +16,7 @@
 #include <net/ethernet.h>
 #include <net/ethernet_mgmt.h>
 #include <net/gptp.h>
+#include <net/lldp.h>
 
 #include "arp.h"
 #include "net_private.h"
@@ -550,6 +551,10 @@ static inline int ethernet_enable(struct net_if *iface, bool state)
 	if (!state) {
 		net_arp_clear_cache(iface);
 	}
+
+#ifdef CONFIG_NET_LLDP
+	return net_lldp_enable(iface, state);
+#endif
 
 	return 0;
 }
