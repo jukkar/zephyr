@@ -29,6 +29,17 @@ source "subsys/net/ip/Kconfig.ipv6"
 
 source "subsys/net/ip/Kconfig.ipv4"
 
+config NET_SERVICE_MONITOR
+	bool "Enable network service monitor"
+	default n
+	select NET_MGMT
+	select NET_MGMT_EVENT
+	help
+	Activate a network service monitor that will generate various higher
+	management events like a CONNECTED event, which is sent when a network
+	interface is usable state meaning that the IP address is set etc.
+	See include/net/net_service.h for more information about the events.
+
 config NET_SHELL
 	bool "Enable network shell utilities"
 	default n

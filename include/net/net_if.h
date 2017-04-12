@@ -25,6 +25,7 @@
 #include <net/net_linkaddr.h>
 #include <net/net_ip.h>
 #include <net/net_l2.h>
+#include <net/net_service.h>
 
 #if defined(CONFIG_NET_DHCPV4)
 #include <net/dhcpv4.h>
@@ -165,7 +166,6 @@ enum {
 #if defined(CONFIG_NET_OFFLOAD)
 struct net_offload;
 #endif /* CONFIG_NET_OFFLOAD */
-
 
 /**
  * @brief Network Interface structure
