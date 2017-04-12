@@ -18,6 +18,7 @@
 #include <net/net_if.h>
 #include <net/arp.h>
 #include <net/net_mgmt.h>
+#include <net/net_service.h>
 
 #include "net_private.h"
 #include "ipv6.h"
@@ -323,6 +324,50 @@ struct net_if *net_if_get_default(void)
 	return __net_if_start;
 }
 
+static bool is_interface_disconnected(struct net_if *iface)
+{
+	int count = 0;
+	int i;
+
+	if (!IS_ENABLED(CONFIG_NET_SERVICE_MONITOR)) {
+		return false;
+	}
+
+#if defined(CONFIG_NET_IPV6)
+	count++;
+
+	for (i = 0; i < NET_IF_MAX_IPV6_ADDR; i++) {
+		if (iface->ipv6.unicast[i].is_used) {
+			break;
+		}
+	}
+
+	if (i == NET_IF_MAX_IPV6_ADDR) {
+		count--;
+	}
+#endif
+
+#if defined(CONFIG_NET_IPV4)
+	count++;
+
+	for (i = 0; i < NET_IF_MAX_IPV4_ADDR; i++) {
+		if (iface->ipv4.unicast[i].is_used) {
+			break;
+		}
+	}
+
+	if (i == NET_IF_MAX_IPV4_ADDR) {
+		count--;
+	}
+#endif
+
+	if (count == 0) {
+		return true;
+	}
+
+	return false;
+}
+
 #if defined(CONFIG_NET_IPV6)
 
 #if defined(CONFIG_NET_IPV6_MLD)
@@ -445,6 +490,8 @@ void net_if_start_dad(struct net_if *iface)
 		NET_ERR("Cannot add %s address to interface %p, DAD fails",
 			net_sprint_ipv6_addr(&addr), iface);
 	}
+
+	net_service_change_state(iface, NET_SERVICE_STATE_CONNECTING);
 }
 
 void net_if_ipv6_dad_failed(struct net_if *iface, const struct in6_addr *addr)
@@ -668,6 +715,11 @@ bool net_if_ipv6_addr_rm(struct net_if *iface, const struct in6_addr *addr)
 			net_addr_type2str(iface->ipv6.unicast[i].addr_type));
 
 		net_mgmt_event_notify(NET_EVENT_IPV6_ADDR_DEL, iface);
+
+		if (is_interface_disconnected(iface)) {
+			net_service_change_state(iface,
+					       NET_SERVICE_STATE_IDLE);
+		}
 
 		return true;
 	}
@@ -1491,6 +1543,16 @@ struct net_if_addr *net_if_ipv4_addr_add(struct net_if *iface,
 
 		net_mgmt_event_notify(NET_EVENT_IPV4_ADDR_ADD, iface);
 
+		net_service_change_state(iface,
+					 NET_SERVICE_STATE_CONNECTING);
+
+		if (IS_ENABLED(CONFIG_NET_SERVICE_MONITOR) &&
+		    !net_is_ipv4_addr_loopback(addr) &&
+		    !net_is_ipv4_addr_unspecified(addr)) {
+			net_service_change_state(iface,
+						 NET_SERVICE_STATE_CONNECTED);
+		}
+
 		return &iface->ipv4.unicast[i];
 	}
 
@@ -1518,6 +1580,11 @@ bool net_if_ipv4_addr_rm(struct net_if *iface, struct in_addr *addr)
 			i, iface, net_sprint_ipv4_addr(addr));
 
 		net_mgmt_event_notify(NET_EVENT_IPV4_ADDR_DEL, iface);
+
+		if (is_interface_disconnected(iface)) {
+			net_service_change_state(iface,
+					       NET_SERVICE_STATE_IDLE);
+		}
 
 		return true;
 	}
@@ -1684,6 +1751,12 @@ void net_if_post_init(void)
 	struct net_if *iface;
 
 	NET_DBG("");
+
+	/* Start to monitor various management events, and if it is
+	 * found out that we have a network connection, then generate
+	 * proper events.
+	 */
+	net_service_init();
 
 	/* After TX is running, attempt to bring the interface up */
 	for (iface = __net_if_start; iface != __net_if_end; iface++) {
