@@ -66,26 +66,50 @@ static void validate_state_transition(enum net_service_state current,
 			net_service_state2str(new));
 	}
 }
-#endif /* CONFIG_NET_DEBUG_SERVICE */
 
-void net_service_change_state(struct net_if *iface,
-			      enum net_service_state new_state)
+static void check_state_change(struct net_service *service,
+			       enum net_service_state old_state,
+			       enum net_service_state new_state)
 {
-	if (system_service_state == new_state) {
-		return;
-	}
-
-	NET_DBG("iface %p %s (%ld) => %s (%ld)", iface,
-		net_service_state2str(system_service_state),
-		system_service_state & ~_NET_EVENT_SERVICE_BASE,
+	NET_DBG("service %p %s (%ld) => %s (%ld)", service,
+		net_service_state2str(old_state),
+		old_state & ~_NET_EVENT_SERVICE_BASE,
 		net_service_state2str(new_state),
 		new_state & ~_NET_EVENT_SERVICE_BASE);
 
 #if defined(CONFIG_NET_DEBUG_SERVICE)
-	validate_state_transition(system_service_state, new_state);
+	validate_state_transition(old_state, new_state);
 #endif
+}
 
-	net_mgmt_event_notify(new_state, iface);
+#else
+#define check_state_change(...)
+#endif /* CONFIG_NET_DEBUG_SERVICE */
+
+void net_service_change_state(struct net_service *service,
+			      enum net_service_state new_state)
+{
+	if (service) {
+		if (service->state == new_state) {
+			return;
+		}
+
+		check_state_change(service, service->state, new_state);
+
+		net_mgmt_event_notify(new_state, service->entity);
+	}
+
+	if (system_service_state == new_state) {
+		return;
+	}
+
+	check_state_change(NULL, system_service_state, new_state);
+
+	/* TODO: We would need to track the states here and change
+	 * the global state only when needed.
+	 */
+
+	net_mgmt_event_notify(new_state, NULL);
 	system_service_state = new_state;
 }
 
@@ -102,7 +126,7 @@ static void ipv4_addr_add_handler(struct net_mgmt_event_callback *cb,
 		addr = &iface->ipv4.unicast[i];
 		if (addr->is_used &&
 		    addr->address.family == AF_INET) {
-			net_service_change_state(iface,
+			net_service_change_state(&iface->service,
 						 NET_SERVICE_STATE_CONNECTED);
 			break;
 		}
@@ -124,7 +148,7 @@ static void ipv6_dad_ok_handler(struct net_mgmt_event_callback *cb,
 		if (addr->is_used &&
 		    addr->addr_state == NET_ADDR_PREFERRED &&
 		    addr->address.family == AF_INET6) {
-			net_service_change_state(iface,
+			net_service_change_state(&iface->service,
 						 NET_SERVICE_STATE_CONNECTED);
 			break;
 		}

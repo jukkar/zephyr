@@ -491,7 +491,8 @@ void net_if_start_dad(struct net_if *iface)
 			net_sprint_ipv6_addr(&addr), iface);
 	}
 
-	net_service_change_state(iface, NET_SERVICE_STATE_CONNECTING);
+	net_service_change_state(&iface->service,
+				 NET_SERVICE_STATE_CONNECTING);
 }
 
 void net_if_ipv6_dad_failed(struct net_if *iface, const struct in6_addr *addr)
@@ -717,8 +718,8 @@ bool net_if_ipv6_addr_rm(struct net_if *iface, const struct in6_addr *addr)
 		net_mgmt_event_notify(NET_EVENT_IPV6_ADDR_DEL, iface);
 
 		if (is_interface_disconnected(iface)) {
-			net_service_change_state(iface,
-					       NET_SERVICE_STATE_IDLE);
+			net_service_change_state(&iface->service,
+						 NET_SERVICE_STATE_IDLE);
 		}
 
 		return true;
@@ -1543,13 +1544,13 @@ struct net_if_addr *net_if_ipv4_addr_add(struct net_if *iface,
 
 		net_mgmt_event_notify(NET_EVENT_IPV4_ADDR_ADD, iface);
 
-		net_service_change_state(iface,
+		net_service_change_state(&iface->service,
 					 NET_SERVICE_STATE_CONNECTING);
 
 		if (IS_ENABLED(CONFIG_NET_SERVICE_MONITOR) &&
 		    !net_is_ipv4_addr_loopback(addr) &&
 		    !net_is_ipv4_addr_unspecified(addr)) {
-			net_service_change_state(iface,
+			net_service_change_state(&iface->service,
 						 NET_SERVICE_STATE_CONNECTED);
 		}
 
@@ -1582,8 +1583,8 @@ bool net_if_ipv4_addr_rm(struct net_if *iface, struct in_addr *addr)
 		net_mgmt_event_notify(NET_EVENT_IPV4_ADDR_DEL, iface);
 
 		if (is_interface_disconnected(iface)) {
-			net_service_change_state(iface,
-					       NET_SERVICE_STATE_IDLE);
+			net_service_change_state(&iface->service,
+						 NET_SERVICE_STATE_IDLE);
 		}
 
 		return true;

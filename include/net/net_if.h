@@ -211,6 +211,11 @@ struct net_if {
 	struct net_offload *offload;
 #endif /* CONFIG_NET_OFFLOAD */
 
+#if defined(CONFIG_NET_SERVICE_MONITOR)
+	/** Network interface state tracking */
+	struct net_service service;
+#endif
+
 #if defined(CONFIG_NET_IPV6)
 #define NET_IF_MAX_IPV6_ADDR CONFIG_NET_IF_UNICAST_IPV6_ADDR_COUNT
 #define NET_IF_MAX_IPV6_MADDR CONFIG_NET_IF_MCAST_IPV6_ADDR_COUNT
@@ -1202,6 +1207,14 @@ struct net_if_api {
 #define NET_IF_DHCPV4_INIT
 #endif
 
+#if defined(CONFIG_NET_SERVICE_MONITOR)
+#define NET_IF_SERVICE_INIT(iface)				\
+		.service.state = NET_SERVICE_STATE_IDLE,	\
+		.service.entity = &iface,
+#else
+#define NET_IF_SERVICE_INIT(iface)
+#endif
+
 #define NET_IF_GET_NAME(dev_name, sfx) (__net_if_##dev_name##_##sfx)
 #define NET_IF_EVENT_GET_NAME(dev_name, sfx)	\
 	(__net_if_event_##dev_name##_##sfx)
@@ -1217,6 +1230,7 @@ struct net_if_api {
 		.l2_data = &(NET_L2_GET_DATA(dev_name, sfx)),		\
 		.mtu = _mtu,						\
 		NET_IF_DHCPV4_INIT					\
+		NET_IF_SERVICE_INIT(NET_IF_GET_NAME(dev_name, sfx))	\
 	};								\
 	static struct k_poll_event					\
 	(NET_IF_EVENT_GET_NAME(dev_name, sfx)) __used			\
