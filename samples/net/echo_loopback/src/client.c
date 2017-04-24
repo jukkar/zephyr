@@ -72,7 +72,7 @@ static int ipsum_len;
 
 #if defined(CONFIG_NET_TCP)
 NET_PKT_TX_SLAB_DEFINE(echo_tx_tcp, 30);
-NET_PKT_DATA_POOL_DEFINE(echo_data_tcp, 70);
+NET_PKT_DATA_POOL_DEFINE(echo_data_tcp, 230);
 
 static struct k_mem_slab *tx_tcp_pool(void)
 {
