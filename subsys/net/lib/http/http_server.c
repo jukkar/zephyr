@@ -38,6 +38,9 @@ static unsigned char heap[CONFIG_HTTPS_HEAP_SIZE];
 #endif
 #endif
 
+/* Wait the TCP ACK for a sent message before closing the connection. */
+#define RESPONSE_ACK_TIMEOUT K_SECONDS(1)
+
 #define HTTP_DEFAULT_PORT  80
 #define HTTPS_DEFAULT_PORT 443
 
@@ -112,7 +115,10 @@ static void pkt_sent(struct net_context *context,
 		     void *token,
 		     void *user_data)
 {
-	/* We can just close the context after the packet is sent. */
+	/* We can just close the context after the packet is sent.
+	 * If the connection is closed before the timeout, then this
+	 * callback is not called at all.
+	 */
 	net_context_unref(context);
 }
 
@@ -147,7 +153,7 @@ int http_response(struct http_server_ctx *ctx, const char *http_header,
 
 	net_pkt_set_appdatalen(pkt, net_buf_frags_len(pkt->frags));
 
-	ret = ctx->send_data(pkt, pkt_sent, 0, NULL, ctx);
+	ret = ctx->send_data(pkt, pkt_sent, RESPONSE_ACK_TIMEOUT, NULL, ctx);
 	if (ret != 0) {
 		goto exit_routine;
 	}
