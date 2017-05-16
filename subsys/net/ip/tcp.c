@@ -342,6 +342,8 @@ static struct net_pkt *prepare_segment(struct net_tcp *tcp,
 	tcphdr->urg[0] = 0;
 	tcphdr->urg[1] = 0;
 
+	NET_DBG("pkt %p seq %u ack %u", pkt, segment->seq, segment->ack);
+
 	if (tail) {
 		net_pkt_frag_add(pkt, tail);
 	}
@@ -444,6 +446,10 @@ int net_tcp_prepare_segment(struct net_tcp *tcp, u8_t flags,
 	if (!*send_pkt) {
 		return -EINVAL;
 	}
+
+	NET_DBG("pkt %p tcp %p seq %u ack %u", *send_pkt, tcp,
+		tcp->send_seq, tcp->send_ack);
+	net_print_frags("send ", *send_pkt);
 
 	tcp->send_seq = seq;
 
@@ -659,6 +665,8 @@ int net_tcp_queue_data(struct net_context *context, struct net_pkt *pkt)
 			      retry_timeout(context->tcp), 0);
 	}
 
+	net_print_frags("queue ", pkt);
+	net_tcp_trace(pkt, context->tcp);
 	do_ref_if_needed(pkt);
 
 	return 0;
@@ -789,6 +797,18 @@ void net_tcp_ack_received(struct net_context *ctx, u32_t ack)
 	u32_t seq;
 	bool valid_ack = false;
 
+	int i = 0;
+	struct net_pkt *foo, *tmp;
+	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(list, foo, tmp, sent_list) {
+		seq = sys_get_be32(tcphdr->seq) + net_pkt_appdatalen(foo) - 1;
+		tcphdr = NET_TCP_HDR(foo);
+
+		NET_DBG("[%d] pkt %p tcp %p appdata %d hdr->seq %u seq %u ack %u result %d",
+			i++, foo, tcp, net_pkt_appdatalen(foo),
+			sys_get_be32(tcphdr->seq), seq, ack,
+			seq_greater(ack , seq));
+	}
+
 	while (!sys_slist_is_empty(list)) {
 		head = sys_slist_peek_head(list);
 		pkt = CONTAINER_OF(head, struct net_pkt, sent_list);
@@ -796,9 +816,16 @@ void net_tcp_ack_received(struct net_context *ctx, u32_t ack)
 
 		seq = sys_get_be32(tcphdr->seq) + net_pkt_appdatalen(pkt) - 1;
 
+		NET_DBG("pkt %p tcp %p appdata %d hdr->seq %u seq %u ack %u",
+			pkt, tcp, net_pkt_appdatalen(pkt),
+			sys_get_be32(tcphdr->seq), seq, ack);
+
 		if (!seq_greater(ack, seq)) {
+			net_print_frags("ack-recv ", pkt);
 			break;
 		}
+
+		NET_DBG("seq %u < ack %u", seq, ack);
 
 		if (tcphdr->flags & NET_TCP_FIN) {
 			enum net_tcp_state s = net_tcp_get_state(tcp);
