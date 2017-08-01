@@ -1,0 +1,10 @@
+sample:
+    name: RPL Border Router
+tests:
+-   test:
+        build_only: true
+        # There are few platforms that does not fit in RAM
+        platform_exclude: frdm_kw41z quark_se_c1000_devboard
+        depends_on: ieee802154
+        extra_args: CONF_FILE="prj.conf"
+        tags: net rpl
