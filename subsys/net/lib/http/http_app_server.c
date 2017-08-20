@@ -26,6 +26,10 @@
 	"but not both."
 #endif
 
+#if defined(CONFIG_WEBSOCKET)
+#include <net/websocket.h>
+#endif
+
 #define BUF_ALLOC_TIMEOUT 100
 
 #define HTTP_DEFAULT_PORT  80
@@ -421,6 +425,10 @@ static inline void new_client(struct http_ctx *ctx,
 	struct net_context *net_ctx;
 	const char *type_str = "HTTP";
 
+	if (type == WS_CONNECTION) {
+		type_str = "WS";
+	}
+
 	net_ctx = get_server_ctx(app_ctx, ctx->addr);
 	if (net_ctx) {
 		NET_INFO("[%p] %s connection from %s (%p)", ctx, type_str,
@@ -677,7 +685,7 @@ static void http_received(struct net_app_ctx *app_ctx,
 		 * any HTTP traffic in the connection. Give the data to
 		 * application to send.
 		 */
-		goto http_only;
+		goto ws_only;
 	}
 
 	while (frag) {
@@ -689,7 +697,7 @@ static void http_received(struct net_app_ctx *app_ctx,
 		    ctx->request_buf_len) {
 
 			if (ctx->state == HTTP_STATE_HEADER_RECEIVED) {
-				goto http_ready;
+				goto ws_ready;
 			}
 
 			/* If the caller has not supplied a callback, then
@@ -744,7 +752,7 @@ fail:
 		http_send_error(ctx, 400, NULL, 0);
 	} else {
 		if (ctx->state == HTTP_STATE_HEADER_RECEIVED) {
-			goto http_ready;
+			goto ws_ready;
 		}
 
 		http_process_recv(ctx);
@@ -758,16 +766,48 @@ quit:
 
 	return;
 
-http_only:
+ws_only:
 	if (ctx->cb.recv) {
+#if defined(CONFIG_WEBSOCKET)
+		u32_t flags, mask_value = 0;
+		bool masked = false;
+
+		flags = ws_strip_header(pkt, &masked, &mask_value);
+
+		if (flags & WS_FLAG_CLOSE) {
+			NET_DBG("[%p] Close request from peer", ctx);
+			http_close(ctx);
+			return;
+		}
+
+		if (flags & WS_FLAG_PING) {
+			NET_DBG("[%p] Ping request from peer", ctx);
+			ws_send_msg(ctx, NULL, WS_OPCODE_PONG, false, true,
+				    NULL);
+			return;
+		}
+
+		NET_DBG("Forward the data to application for processing.");
+
+		NET_DBG("Masked %s mask 0x%04x", masked ? "yes" : "no",
+			mask_value);
+
+		if (masked) {
+			/* Always deliver unmasked data to the application */
+			ws_mask_pkt(pkt, mask_value);
+		}
+
+		ctx->cb.recv(ctx, pkt, 0, flags, ctx->user_data);
+#else
 		ctx->cb.recv(ctx, pkt, 0, 0, ctx->user_data);
+#endif
 	}
 
 	return;
 
-http_ready:
+ws_ready:
 	http_change_state(ctx, HTTP_STATE_OPEN);
-	url_connected(ctx, HTTP_CONNECT);
+	url_connected(ctx, WS_CONNECTION);
 	net_pkt_unref(pkt);
 }
 
@@ -880,7 +920,11 @@ static int on_headers_complete(struct http_parser *parser)
 {
 	ARG_UNUSED(parser);
 
+#if defined(CONFIG_WEBSOCKET)
+	return ws_headers_complete(parser);
+#else
 	return 0;
+#endif
 }
 
 static int init_http_parser(struct http_ctx *ctx)

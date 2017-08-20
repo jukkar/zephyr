@@ -33,3 +33,7 @@ endif
 ifdef CONFIG_SNTP
 include $(srctree)/subsys/net/lib/sntp/Makefile
 endif
+
+ifdef CONFIG_WEBSOCKET
+include $(srctree)/subsys/net/lib/websocket/Makefile
+endif

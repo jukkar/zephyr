@@ -7,3 +7,4 @@ obj-$(CONFIG_HTTP) += http/
 obj-$(CONFIG_NET_APP_SETTINGS) += app/
 obj-$(CONFIG_LWM2M) += lwm2m/
 obj-$(CONFIG_SNTP) += sntp/
+obj-$(CONFIG_WEBSOCKET) += websocket/
