@@ -122,6 +122,12 @@ void ws_mask_pkt(struct net_pkt *pkt, u32_t masking_value);
  */
 int ws_headers_complete(struct http_parser *parser);
 
+#if defined(CONFIG_WS_CONSOLE)
+int ws_console_enable(struct ws_ctx *ctx);
+int ws_console_disable(struct ws_ctx *ctx);
+int ws_console_recv(struct ws_ctx *ctx, struct net_pkt *pkt);
+#endif /* CONFIG_WS_CONSOLE */
+
 #ifdef __cplusplus
 }
 #endif
