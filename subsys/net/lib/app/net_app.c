@@ -534,8 +534,9 @@ static struct net_context *get_server_ctx(struct net_app_ctx *ctx,
 
 		if (!dst) {
 			if (tmp->net_app == ctx) {
-				NET_DBG("Selecting net_ctx %p for NULL dst",
-					tmp);
+				NET_DBG("Selecting net_ctx %p iface %p for "
+					"NULL dst",
+					tmp, net_context_get_iface(tmp));
 				return tmp;
 			}
 
@@ -556,8 +557,9 @@ static struct net_context *get_server_ctx(struct net_app_ctx *ctx,
 
 			if (dst->sa_family == AF_UNSPEC) {
 				if (tmp->net_app == ctx) {
-					NET_DBG("Selecting net_ctx %p for "
-						"AF_UNSPEC port %d", tmp,
+					NET_DBG("Selecting net_ctx %p iface %p"
+						" for AF_UNSPEC port %d", tmp,
+						net_context_get_iface(tmp),
 						ntohs(rport));
 					return tmp;
 				}
@@ -567,15 +569,18 @@ static struct net_context *get_server_ctx(struct net_app_ctx *ctx,
 
 			if (net_ipv6_addr_cmp(addr6, remote6) &&
 			    port == rport) {
-				NET_DBG("Selecting net_ctx %p for AF_INET6 "
-					"port %d", tmp, ntohs(rport));
+				NET_DBG("Selecting net_ctx %p iface %p for "
+					"AF_INET6 port %d", tmp,
+					net_context_get_iface(tmp),
+					ntohs(rport));
 				return tmp;
 			}
 		}
 
 		if (IS_ENABLED(CONFIG_NET_IPV4) &&
-		    tmp->remote.sa_family == AF_INET &&
-		    dst->sa_family == AF_INET) {
+		    (dst->sa_family == AF_UNSPEC ||
+		     (tmp->remote.sa_family == AF_INET &&
+		      dst->sa_family == AF_INET))) {
 			struct in_addr *addr4 = &net_sin(dst)->sin_addr;
 			struct in_addr *remote4;
 
@@ -585,8 +590,9 @@ static struct net_context *get_server_ctx(struct net_app_ctx *ctx,
 
 			if (dst->sa_family == AF_UNSPEC) {
 				if (tmp->net_app == ctx) {
-					NET_DBG("Selecting net_ctx %p for "
-						"AF_UNSPEC port %d", tmp,
+					NET_DBG("Selecting net_ctx %p iface %p"
+						" for AF_UNSPEC port %d", tmp,
+						net_context_get_iface(tmp),
 						ntohs(port));
 					return tmp;
 				}
@@ -596,8 +602,10 @@ static struct net_context *get_server_ctx(struct net_app_ctx *ctx,
 
 			if (net_ipv4_addr_cmp(addr4, remote4) &&
 			    port == rport) {
-				NET_DBG("Selecting net_ctx %p for AF_INET "
-					"port %d", tmp, ntohs(port));
+				NET_DBG("Selecting net_ctx %p iface %p for "
+					"AF_INET port %d", tmp,
+					net_context_get_iface(tmp),
+					ntohs(port));
 				return tmp;
 			}
 
