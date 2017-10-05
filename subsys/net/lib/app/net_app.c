@@ -1856,6 +1856,16 @@ reset:
 		ret = mbedtls_ssl_handshake(&ctx->tls.mbedtls.ssl);
 		if (ret != MBEDTLS_ERR_SSL_WANT_READ &&
 		    ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
+			/* If we get MAC verification failure, then it usually
+			 * means that we run out of heap. As that Invalid MAC
+			 * error is really confusing, give hint about possible
+			 * out of memory issue.
+			 */
+			if (ret == MBEDTLS_ERR_SSL_INVALID_MAC) {
+				NET_DBG("Check CONFIG_MBEDTLS_HEAP_SIZE as "
+					"you could be of out mem in mbedtls");
+			}
+
 			if (ret < 0) {
 				goto close;
 			}
