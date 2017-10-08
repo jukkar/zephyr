@@ -108,6 +108,9 @@ char *_net_app_sprint_ipaddr(char *buf, int buflen,
 		snprintk(buf, buflen, "%s:%u", ipaddr,
 			 ntohs(net_sin(addr)->sin_port));
 #endif
+	} else {
+		snprintk(buf, buflen, "<invalid address family %d>",
+			 addr->sa_family);
 	}
 
 	return buf;
