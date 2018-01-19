@@ -837,6 +837,8 @@ static void eth0_iface_init(struct net_if *iface)
 
 	/* Set up link parameters */
 	link_configure(cfg->regs, link_status);
+
+	ethernet_init(iface);
 }
 
 static const struct ethernet_api eth0_api = {
