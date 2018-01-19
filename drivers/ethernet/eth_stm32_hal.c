@@ -367,6 +367,8 @@ static void eth0_iface_init(struct net_if *iface)
 	net_if_set_link_addr(iface, dev_data->mac_addr,
 			     sizeof(dev_data->mac_addr),
 			     NET_LINK_ETHERNET);
+
+	ethernet_init(iface);
 }
 
 static const struct ethernet_api eth0_api = {
