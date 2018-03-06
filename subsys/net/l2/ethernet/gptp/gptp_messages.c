@@ -161,6 +161,7 @@ struct net_pkt *gptp_prepare_sync(int port)
 	net_pkt_frag_add(pkt, frag);
 	net_pkt_set_iface(pkt, iface);
 	net_pkt_set_family(pkt, AF_UNSPEC);
+	net_pkt_set_priority(pkt, NET_PRIORITY_CA);
 
 	net_pkt_set_ll_reserve(pkt, eth_len);
 
@@ -276,6 +277,7 @@ struct net_pkt *gptp_prepare_follow_up(int port, struct net_pkt *sync)
 	net_pkt_set_iface(pkt, iface);
 	net_pkt_set_family(pkt, AF_UNSPEC);
 	net_pkt_set_ll_reserve(pkt, eth_len);
+	net_pkt_set_priority(pkt, NET_PRIORITY_IC);
 
 #if defined(CONFIG_NET_VLAN)
 	if (vlan_enabled) {
@@ -388,6 +390,7 @@ struct net_pkt *gptp_prepare_pdelay_req(int port)
 	net_pkt_set_iface(pkt, iface);
 	net_pkt_set_family(pkt, AF_UNSPEC);
 	net_pkt_set_ll_reserve(pkt, eth_len);
+	net_pkt_set_priority(pkt, NET_PRIORITY_CA);
 
 #if defined(CONFIG_NET_VLAN)
 	if (vlan_enabled) {
@@ -501,6 +504,7 @@ struct net_pkt *gptp_prepare_pdelay_resp(int port,
 	net_pkt_set_iface(pkt, iface);
 	net_pkt_set_family(pkt, AF_INET);
 	net_pkt_set_ll_reserve(pkt, eth_len);
+	net_pkt_set_priority(pkt, NET_PRIORITY_CA);
 
 #if defined(CONFIG_NET_VLAN)
 	if (vlan_enabled) {
@@ -620,6 +624,7 @@ struct net_pkt *gptp_prepare_pdelay_follow_up(int port,
 	net_pkt_set_iface(pkt, iface);
 	net_pkt_set_family(pkt, AF_INET);
 	net_pkt_set_ll_reserve(pkt, eth_len);
+	net_pkt_set_priority(pkt, NET_PRIORITY_IC);
 
 #if defined(CONFIG_NET_VLAN)
 	if (vlan_enabled) {
@@ -747,6 +752,7 @@ struct net_pkt *gptp_prepare_announce(int port)
 	net_pkt_set_iface(pkt, iface);
 	net_pkt_set_family(pkt, AF_INET);
 	net_pkt_set_ll_reserve(pkt, eth_len);
+	net_pkt_set_priority(pkt, NET_PRIORITY_IC);
 
 #if defined(CONFIG_NET_VLAN)
 	if (vlan_enabled) {
