@@ -250,6 +250,27 @@ struct net_stats_tc {
 	} recv[NET_TC_RX_COUNT];
 };
 
+struct net_stats_ts_data {
+	/** Processing time in nanoseconds */
+	u32_t low;
+	u32_t average;
+	u32_t high;
+};
+
+struct net_stats_ts {
+	/** Network packet timestamping statistics. This tells how many
+	 * nanoseconds it took for packet to transmit or receive. This
+	 * is only calculated for those packets that have TX time-stamping
+	 * enabled.
+	 */
+	struct {
+		struct net_stats_ts_data time;
+	} tx[NET_TC_TX_COUNT];
+
+	struct {
+		struct net_stats_ts_data time;
+	} rx[NET_TC_RX_COUNT];
+};
 
 struct net_stats {
 	net_stats_t processing_error;
@@ -296,6 +317,10 @@ struct net_stats {
 
 #if NET_TC_COUNT > 1
 	struct net_stats_tc tc;
+#endif
+
+#if defined(CONFIG_NET_PKT_TIMESTAMP)
+	struct net_stats_ts ts;
 #endif
 };
 
