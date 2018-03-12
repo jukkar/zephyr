@@ -28,6 +28,11 @@
 #include <net/net_if.h>
 #include <net/ethernet.h>
 
+#if defined(CONFIG_ETH_NATIVE_POSIX_PTP_CLOCK)
+#include <ptp_clock.h>
+#include <net/gptp_messages.h>
+#endif
+
 #include "eth_native_posix_priv.h"
 #include "eth_stats.h"
 
@@ -77,6 +82,107 @@ static struct eth_context *get_context(struct net_if *iface)
 	return net_if_get_device(iface)->driver_data;
 }
 
+#if defined(CONFIG_NET_GPTP)
+static bool need_timestamping(struct gptp_hdr *hdr)
+{
+	switch (hdr->message_type) {
+	case GPTP_SYNC_MESSAGE:
+	case GPTP_PATH_DELAY_RESP_MESSAGE:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static struct gptp_hdr *check_gptp_msg(struct net_if *iface,
+				       struct net_pkt *pkt)
+{
+	struct ethernet_context *eth_ctx;
+	struct gptp_hdr *gptp_hdr;
+	u8_t *msg_start;
+
+	if (net_pkt_ll_reserve(pkt)) {
+		msg_start = net_pkt_ll(pkt);
+	} else {
+		msg_start = net_pkt_ip_data(pkt);
+	}
+
+#if defined(CONFIG_NET_VLAN)
+	eth_ctx = net_if_l2_data(iface);
+	if (net_eth_is_vlan_enabled(eth_ctx, iface)) {
+		struct net_eth_vlan_hdr *hdr_vlan;
+
+		hdr_vlan = (struct net_eth_vlan_hdr *)msg_start;
+		if (ntohs(hdr_vlan->type) != NET_ETH_PTYPE_PTP) {
+			return NULL;
+		}
+
+		gptp_hdr = (struct gptp_hdr *)(msg_start +
+					sizeof(struct net_eth_vlan_hdr));
+	} else
+#endif
+	{
+		struct net_eth_hdr *hdr;
+
+		hdr = (struct net_eth_hdr *)msg_start;
+		if (ntohs(hdr->type) != NET_ETH_PTYPE_PTP) {
+			return NULL;
+		}
+
+		gptp_hdr = (struct gptp_hdr *)(msg_start +
+					sizeof(struct net_eth_hdr));
+	}
+
+	return gptp_hdr;
+}
+
+static void update_pkt_priority(struct gptp_hdr *hdr, struct net_pkt *pkt)
+{
+	switch (hdr->message_type) {
+	case GPTP_SYNC_MESSAGE:
+	case GPTP_DELAY_REQ_MESSAGE:
+	case GPTP_PATH_DELAY_REQ_MESSAGE:
+	case GPTP_PATH_DELAY_RESP_MESSAGE:
+		net_pkt_set_priority(pkt, NET_PRIORITY_CA);
+		break;
+	default:
+		net_pkt_set_priority(pkt, NET_PRIORITY_IC);
+		break;
+	}
+}
+
+static void update_gptp(struct net_if *iface, struct net_pkt *pkt,
+			bool send)
+{
+	struct net_ptp_time timestamp;
+	struct gptp_hdr *hdr;
+	int ret;
+
+	ret = eth_clock_gettime(&timestamp);
+	if (ret < 0) {
+		return;
+	}
+
+	net_pkt_set_timestamp(pkt, &timestamp);
+
+	hdr = check_gptp_msg(iface, pkt);
+	if (!hdr) {
+		return;
+	}
+
+	if (send) {
+		ret = need_timestamping(hdr);
+		if (ret) {
+			net_if_add_tx_timestamp(pkt);
+		}
+	} else {
+		update_pkt_priority(hdr, pkt);
+	}
+}
+#else
+#define update_gptp(iface, pkt, send)
+#endif /* CONFIG_NET_GPTP */
+
 static int eth_send(struct net_if *iface, struct net_pkt *pkt)
 {
 	struct eth_context *ctx = get_context(iface);
@@ -109,6 +215,8 @@ static int eth_send(struct net_if *iface, struct net_pkt *pkt)
 			eth_stats_update_multicast_tx(iface);
 		}
 	}
+
+	update_gptp(iface, pkt, true);
 
 	SYS_LOG_DBG("Send pkt %p len %d", pkt, count);
 
@@ -200,6 +308,15 @@ static int read_data(struct eth_context *ctx, int fd)
 			net_pkt_set_vlan_tci(pkt, ntohs(hdr_vlan->vlan.tci));
 			vlan_tag = net_pkt_vlan_tag(pkt);
 		}
+
+#if CONFIG_NET_TC_RX_COUNT > 1
+		{
+			enum net_priority prio;
+
+			prio = net_vlan2priority(net_pkt_vlan_priority(pkt));
+			net_pkt_set_priority(pkt, prio);
+		}
+#endif
 	}
 #endif
 
@@ -221,6 +338,8 @@ static int read_data(struct eth_context *ctx, int fd)
 	}
 
 	SYS_LOG_DBG("Recv pkt %p len %d", pkt, pkt_len);
+
+	update_gptp(iface, pkt, false);
 
 	if (net_recv_data(iface, pkt) < 0) {
 		net_pkt_unref(pkt);
@@ -365,3 +484,60 @@ ETH_NET_DEVICE_INIT(eth_native_posix, CONFIG_ETH_NATIVE_POSIX_DRV_NAME,
 		    eth_init, &eth_context_data, NULL,
 		    CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &eth_if_api,
 		    _ETH_MTU);
+
+#if defined(CONFIG_ETH_NATIVE_POSIX_PTP_CLOCK)
+static int ptp_clock_set_native_posix(struct ptp_clock *clk,
+				      struct net_ptp_time *tm)
+{
+	ARG_UNUSED(clk);
+	ARG_UNUSED(tm);
+
+	/* We cannot set the host device time so this function
+	 * does nothing.
+	 */
+
+	return 0;
+}
+
+static int ptp_clock_get_native_posix(struct ptp_clock *clk,
+				      struct net_ptp_time *tm)
+{
+	return eth_clock_gettime(tm);
+}
+
+static int ptp_clock_adjust_native_posix(struct ptp_clock *clk,
+					 int increment)
+{
+	ARG_UNUSED(clk);
+	ARG_UNUSED(increment);
+
+	/* We cannot adjust the host device time so this function
+	 * does nothing.
+	 */
+
+	return 0;
+}
+
+static int ptp_clock_rate_adjust_native_posix(struct ptp_clock *clk,
+					      float ratio)
+{
+	ARG_UNUSED(clk);
+	ARG_UNUSED(ratio);
+
+	/* We cannot adjust the host device time so this function
+	 * does nothing.
+	 */
+
+	return 0;
+}
+
+static const struct ptp_clock_driver_api api = {
+	.set = ptp_clock_set_native_posix,
+	.get = ptp_clock_get_native_posix,
+	.adjust = ptp_clock_adjust_native_posix,
+	.rate_adjust = ptp_clock_rate_adjust_native_posix,
+};
+
+PTP_CLOCK_DEVICE_INIT(eth_native_posix, api);
+
+#endif /* CONFIG_ETH_NATIVE_POSIX_PTP_CLOCK */
