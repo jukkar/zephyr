@@ -580,10 +580,31 @@ static struct net_pkt *frame_get(struct gmac_queue *queue)
 	return rx_frame;
 }
 
+static struct net_if *get_iface(struct eth_sam_dev_data *ctx,
+				u16_t vlan_tag)
+{
+#if defined(CONFIG_NET_VLAN)
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(ctx->ifaces); i++) {
+		if (ctx->ifaces[i].vlan_tag == vlan_tag) {
+			return ctx->ifaces[i].iface;
+		}
+	}
+
+	return NULL;
+#else
+	ARG_UNUSED(vlan_tag);
+
+	return ctx->ifaces[0].iface;
+#endif
+}
+
 static void eth_rx(struct gmac_queue *queue)
 {
 	struct eth_sam_dev_data *dev_data =
 		CONTAINER_OF(queue, struct eth_sam_dev_data, queue_list);
+	u16_t vlan_tag = NET_VLAN_TAG_UNSPEC;
 	struct net_pkt *rx_frame;
 
 	/* More than one frame could have been received by GMAC, get all
@@ -593,7 +614,36 @@ static void eth_rx(struct gmac_queue *queue)
 	while (rx_frame) {
 		SYS_LOG_DBG("ETH rx");
 
-		if (net_recv_data(dev_data->iface, rx_frame) < 0) {
+#if defined(CONFIG_NET_VLAN)
+		/* FIXME: Instead of this, use the GMAC register to get
+		 * the used VLAN tag.
+		 */
+		{
+			struct net_eth_hdr *hdr = NET_ETH_HDR(rx_frame);
+
+			if (ntohs(hdr->type) == NET_ETH_PTYPE_VLAN) {
+				struct net_eth_vlan_hdr *hdr_vlan =
+					(struct net_eth_vlan_hdr *)
+					NET_ETH_HDR(rx_frame);
+
+				net_pkt_set_vlan_tci(rx_frame,
+						    ntohs(hdr_vlan->vlan.tci));
+				vlan_tag = net_pkt_vlan_tag(rx_frame);
+
+#if CONFIG_NET_TC_RX_COUNT > 1
+				{
+					enum net_priority prio;
+
+					prio = net_vlan2priority(
+					      net_pkt_vlan_priority(rx_frame));
+					net_pkt_set_priority(rx_frame, prio);
+				}
+#endif
+			}
+		}
+#endif
+		if (net_recv_data(get_iface(dev_data, vlan_tag),
+				  rx_frame) < 0) {
 			net_pkt_unref(rx_frame);
 		}
 
@@ -776,11 +826,25 @@ static void eth0_iface_init(struct net_if *iface)
 	struct device *const dev = net_if_get_device(iface);
 	struct eth_sam_dev_data *const dev_data = DEV_DATA(dev);
 	const struct eth_sam_dev_cfg *const cfg = DEV_CFG(dev);
+	static bool init_done;
 	u32_t gmac_ncfgr_val;
 	u32_t link_status;
 	int result;
+	int idx;
 
-	dev_data->iface = iface;
+	idx = net_if_get_by_iface(iface);
+	if (idx > ARRAY_SIZE(dev_data->ifaces)) {
+		SYS_LOG_ERR("Invalid interface %p index %d", iface, idx);
+	} else {
+		dev_data->ifaces[idx].iface = iface;
+	}
+
+	ethernet_init(iface);
+
+	/* The rest of initialization should only be done once */
+	if (init_done) {
+		return;
+	}
 
 	/* Initialize GMAC driver, maximum frame length is 1518 bytes */
 	gmac_ncfgr_val =
@@ -838,12 +902,46 @@ static void eth0_iface_init(struct net_if *iface)
 	/* Set up link parameters */
 	link_configure(cfg->regs, link_status);
 
-	ethernet_init(iface);
+	init_done = true;
 }
+
+#if defined(CONFIG_NET_VLAN)
+static int vlan_setup(struct net_if *iface, u16_t tag, bool enable)
+{
+	struct device *dev = net_if_get_device(iface);
+	struct eth_sam_dev_data *const context = DEV_DATA(dev);
+	int idx;
+
+	if (tag == NET_VLAN_TAG_UNSPEC) {
+		return -EBADF;
+	}
+
+	idx = net_if_get_by_iface(iface);
+
+	if (enable) {
+		/* Enabling VLAN, check if we already have this setup */
+		if (context->ifaces[idx].vlan_tag == tag) {
+			return -EALREADY;
+		}
+
+		context->ifaces[idx].iface = iface;
+		context->ifaces[idx].vlan_tag = tag;
+	} else {
+		context->ifaces[idx].iface = NULL;
+		context->ifaces[idx].vlan_tag = NET_VLAN_TAG_UNSPEC;
+	}
+
+	return 0;
+}
+#endif
 
 static const struct ethernet_api eth0_api = {
 	.iface_api.init = eth0_iface_init,
 	.iface_api.send = eth_tx,
+
+#if defined(CONFIG_NET_VLAN)
+	.vlan_setup = vlan_setup,
+#endif
 };
 
 static struct device DEVICE_NAME_GET(eth0_sam_gmac);
@@ -919,6 +1017,6 @@ static struct eth_sam_dev_data eth0_data = {
 	},
 };
 
-NET_DEVICE_INIT(eth0_sam_gmac, CONFIG_ETH_SAM_GMAC_NAME, eth_initialize,
-		&eth0_data, &eth0_config, CONFIG_ETH_INIT_PRIORITY, &eth0_api,
-		ETHERNET_L2, NET_L2_GET_CTX_TYPE(ETHERNET_L2), GMAC_MTU);
+ETH_NET_DEVICE_INIT(eth0_sam_gmac, CONFIG_ETH_SAM_GMAC_NAME, eth_initialize,
+		    &eth0_data, &eth0_config, CONFIG_ETH_INIT_PRIORITY,
+		    &eth0_api, GMAC_MTU);
