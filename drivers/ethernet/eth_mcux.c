@@ -59,8 +59,18 @@ static const char *phy_state_name(enum eth_mcux_phy_state state)
 	return name[state];
 }
 
-struct eth_context {
+struct ifaces {
 	struct net_if *iface;
+	u16_t vlan_tag;
+};
+
+struct eth_context {
+	/* If VLAN is enabled, there can be multiple VLAN interfaces related to
+	 * this physical device. Interface index is used as an index to this
+	 * array. If VLAN support is disabled, then there is only one element
+	 * in this array.
+	 */
+	struct ifaces ifaces[NET_VLAN_MAX_COUNT];
 	enet_handle_t enet_handle;
 	struct k_sem tx_buf_sem;
 	enum eth_mcux_phy_state phy_state;
@@ -100,8 +110,16 @@ tx_buffer_desc[CONFIG_ETH_MCUX_TX_BUFFERS];
 /* Use ENET_FRAME_MAX_VALNFRAMELEN for VLAN frame size
  * Use ENET_FRAME_MAX_FRAMELEN for ethernet frame size
  */
+#if defined(CONFIG_NET_VLAN)
+#if !defined(ENET_FRAME_MAX_VALNFRAMELEN)
+#define ENET_FRAME_MAX_VALNFRAMELEN (ENET_FRAME_MAX_FRAMELEN + 4)
+#endif
+#define ETH_MCUX_BUFFER_SIZE \
+	ROUND_UP(ENET_FRAME_MAX_VALNFRAMELEN, ENET_BUFF_ALIGNMENT)
+#else
 #define ETH_MCUX_BUFFER_SIZE \
 	ROUND_UP(ENET_FRAME_MAX_FRAMELEN, ENET_BUFF_ALIGNMENT)
+#endif /* CONFIG_NET_VLAN */
 
 static u8_t __aligned(ENET_BUFF_ALIGNMENT)
 rx_buffer[CONFIG_ETH_MCUX_RX_BUFFERS][ETH_MCUX_BUFFER_SIZE];
@@ -131,6 +149,25 @@ static void eth_mcux_decode_duplex_and_speed(u32_t status,
 		*p_phy_speed = kPHY_Speed10M;
 		break;
 	}
+}
+
+static struct net_if *get_iface(struct eth_context *ctx, u16_t vlan_tag)
+{
+#if defined(CONFIG_NET_VLAN)
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(ctx->ifaces); i++) {
+		if (ctx->ifaces[i].vlan_tag == vlan_tag) {
+			return ctx->ifaces[i].iface;
+		}
+	}
+
+	return NULL;
+#else
+	ARG_UNUSED(vlan_tag);
+
+	return ctx->ifaces[0].iface;
+#endif
 }
 
 static void eth_mcux_phy_enter_reset(struct eth_context *context)
@@ -312,7 +349,7 @@ static void eth_mcux_delayed_phy_work(struct k_work *item)
 
 static int eth_tx(struct net_if *iface, struct net_pkt *pkt)
 {
-	struct eth_context *context = iface->dev->driver_data;
+	struct eth_context *context = net_if_get_device(iface)->driver_data;
 	const struct net_buf *frag;
 	u8_t *dst;
 	status_t status;
@@ -368,6 +405,7 @@ static void eth_rx(struct device *iface)
 	u32_t frame_length = 0;
 	status_t status;
 	unsigned int imask;
+	u16_t vlan_tag = NET_VLAN_TAG_UNSPEC;
 
 	status = ENET_GetRxFrameSize(&context->enet_handle,
 				     (uint32_t *)&frame_length);
@@ -458,9 +496,33 @@ static void eth_rx(struct device *iface)
 		frame_length -= frag_len;
 	} while (frame_length > 0);
 
+#if defined(CONFIG_NET_VLAN)
+	{
+		struct net_eth_hdr *hdr = NET_ETH_HDR(pkt);
+
+		if (ntohs(hdr->type) == NET_ETH_PTYPE_VLAN) {
+			struct net_eth_vlan_hdr *hdr_vlan =
+				(struct net_eth_vlan_hdr *)NET_ETH_HDR(pkt);
+
+			net_pkt_set_vlan_tci(pkt, ntohs(hdr_vlan->vlan.tci));
+			vlan_tag = net_pkt_vlan_tag(pkt);
+
+#if CONFIG_NET_TC_RX_COUNT > 1
+			{
+				enum net_priority prio;
+
+				prio = net_vlan2priority(
+						net_pkt_vlan_priority(pkt));
+				net_pkt_set_priority(pkt, prio);
+			}
+#endif
+		}
+	}
+#endif
+
 	irq_unlock(imask);
 
-	if (net_recv_data(context->iface, pkt) < 0) {
+	if (net_recv_data(get_iface(context, vlan_tag), pkt) < 0) {
 		net_pkt_unref(pkt);
 	}
 }
@@ -545,6 +607,10 @@ static int eth_0_init(struct device *dev)
 	generate_mac(context->mac_addr);
 #endif
 
+#if defined(CONFIG_NET_VLAN)
+	enet_config.macSpecialConfig |= kENET_ControlVLANTagEnable;
+#endif
+
 	ENET_Init(ENET,
 		  &context->enet_handle,
 		  &enet_config,
@@ -588,6 +654,7 @@ static void eth_0_iface_init(struct net_if *iface)
 {
 	struct device *dev = net_if_get_device(iface);
 	struct eth_context *context = dev->driver_data;
+	int idx;
 
 #if defined(CONFIG_NET_IPV6)
 	static struct net_if_mcast_monitor mon;
@@ -598,12 +665,54 @@ static void eth_0_iface_init(struct net_if *iface)
 	net_if_set_link_addr(iface, context->mac_addr,
 			     sizeof(context->mac_addr),
 			     NET_LINK_ETHERNET);
-	context->iface = iface;
+
+	idx = net_if_get_by_iface(iface);
+	if (idx > ARRAY_SIZE(context->ifaces)) {
+		SYS_LOG_ERR("Invalid interface %p index %d", iface, idx);
+	} else {
+		context->ifaces[idx].iface = iface;
+	}
+
+	ethernet_init(iface);
 }
 
-static struct net_if_api api_funcs_0 = {
-	.init	= eth_0_iface_init,
-	.send	= eth_tx,
+#if defined(CONFIG_NET_VLAN)
+static int vlan_setup(struct net_if *iface, u16_t tag, bool enable)
+{
+	struct device *dev = net_if_get_device(iface);
+	struct eth_context *context = dev->driver_data;
+	int idx;
+
+	if (tag == NET_VLAN_TAG_UNSPEC) {
+		return -EBADF;
+	}
+
+	idx = net_if_get_by_iface(iface);
+
+	if (enable) {
+		/* Enabling VLAN, check if we already have this setup */
+		if (context->ifaces[idx].vlan_tag == tag) {
+			return -EALREADY;
+		}
+
+		context->ifaces[idx].iface = iface;
+		context->ifaces[idx].vlan_tag = tag;
+	} else {
+		context->ifaces[idx].iface = NULL;
+		context->ifaces[idx].vlan_tag = NET_VLAN_TAG_UNSPEC;
+	}
+
+	return 0;
+}
+#endif
+
+static const struct ethernet_api api_funcs_0 = {
+	.iface_api.init = eth_0_iface_init,
+	.iface_api.send = eth_tx,
+
+#if defined(CONFIG_NET_VLAN)
+	.vlan_setup = vlan_setup,
+#endif
 };
 
 static void eth_mcux_rx_isr(void *p)
@@ -650,10 +759,9 @@ static struct eth_context eth_0_context = {
 	}
 };
 
-NET_DEVICE_INIT(eth_mcux_0, CONFIG_ETH_MCUX_0_NAME,
-		eth_0_init, &eth_0_context,
-		NULL, CONFIG_ETH_INIT_PRIORITY, &api_funcs_0,
-		ETHERNET_L2, NET_L2_GET_CTX_TYPE(ETHERNET_L2), 1500);
+ETH_NET_DEVICE_INIT(eth_mcux_0, CONFIG_ETH_MCUX_0_NAME, eth_0_init,
+		    &eth_0_context, NULL, CONFIG_ETH_INIT_PRIORITY,
+		    &api_funcs_0, 1500);
 
 static void eth_0_config_func(void)
 {
