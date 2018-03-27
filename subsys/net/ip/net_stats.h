@@ -18,9 +18,11 @@ extern struct net_stats net_stats;
 #if defined(CONFIG_NET_STATISTICS_PER_INTERFACE)
 #define SET_STAT(cmd) cmd
 #define GET_STAT(iface, s) (iface ? iface->stats.s : net_stats.s)
+#define GET_STAT_ADDR(iface, s) (iface ? &iface->stats.s : &net_stats.s)
 #else
 #define SET_STAT(cmd)
 #define GET_STAT(iface, s) net_stats.s
+#define GET_STAT_ADDR(iface, s) &GET_STAT(iface, s)
 #endif
 
 /* Core stats */
