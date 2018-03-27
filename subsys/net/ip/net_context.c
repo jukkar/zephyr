@@ -1180,11 +1180,11 @@ NET_CONN_CB(tcp_established)
 	if (tcp_flags & NET_TCP_RST) {
 		/* We only accept RST packet that has valid seq field. */
 		if (!net_tcp_validate_seq(context->tcp, pkt)) {
-			net_stats_update_tcp_seg_rsterr();
+			net_stats_update_tcp_seg_rsterr(net_pkt_iface(pkt));
 			return NET_DROP;
 		}
 
-		net_stats_update_tcp_seg_rst();
+		net_stats_update_tcp_seg_rst(net_pkt_iface(pkt));
 
 		net_tcp_print_recv_info("RST", pkt, tcp_hdr->src_port);
 
@@ -1320,11 +1320,11 @@ NET_CONN_CB(tcp_synack_received)
 	if (NET_TCP_FLAGS(tcp_hdr) & NET_TCP_RST) {
 		/* We only accept RST packet that has valid seq field. */
 		if (!net_tcp_validate_seq(context->tcp, pkt)) {
-			net_stats_update_tcp_seg_rsterr();
+			net_stats_update_tcp_seg_rsterr(net_pkt_iface(pkt));
 			return NET_DROP;
 		}
 
-		net_stats_update_tcp_seg_rst();
+		net_stats_update_tcp_seg_rst(net_pkt_iface(pkt));
 
 		if (context->connect_cb) {
 			context->connect_cb(context, -ECONNREFUSED,
@@ -1739,11 +1739,11 @@ NET_CONN_CB(tcp_syn_rcvd)
 	if (NET_TCP_FLAGS(tcp_hdr) == NET_TCP_RST) {
 
 		if (tcp_backlog_rst(pkt) < 0) {
-			net_stats_update_tcp_seg_rsterr();
+			net_stats_update_tcp_seg_rsterr(net_pkt_iface(pkt));
 			return NET_DROP;
 		}
 
-		net_stats_update_tcp_seg_rst();
+		net_stats_update_tcp_seg_rst(net_pkt_iface(pkt));
 
 		net_tcp_print_recv_info("RST", pkt, tcp_hdr->src_port);
 
@@ -1852,7 +1852,7 @@ NET_CONN_CB(tcp_syn_rcvd)
 	return NET_DROP;
 
 conndrop:
-	net_stats_update_tcp_seg_conndrop();
+	net_stats_update_tcp_seg_conndrop(net_pkt_iface(pkt));
 
 reset:
 	send_reset(tcp->context, &local_addr, &remote_addr);
@@ -2292,7 +2292,7 @@ static enum net_verdict packet_received(struct net_conn *conn,
 		net_pkt_appdata(pkt), net_pkt_appdatalen(pkt),
 		net_pkt_get_len(pkt));
 
-	net_stats_update_tcp_recv(net_pkt_appdatalen(pkt));
+	net_stats_update_tcp_recv(net_pkt_iface(pkt), net_pkt_appdatalen(pkt));
 
 	context->recv_cb(context, pkt, 0, user_data);
 
