@@ -260,65 +260,67 @@ static int net_stats_get(u32_t mgmt_request, struct net_if *iface,
 	size_t len_chk = 0;
 	void *src = NULL;
 
-	ARG_UNUSED(iface);
-
 	switch (NET_MGMT_GET_COMMAND(mgmt_request)) {
 	case NET_REQUEST_STATS_CMD_GET_ALL:
 		len_chk = sizeof(struct net_stats);
-		src = &iface->stats;
+#if defined(CONFIG_NET_STATISTICS_PER_INTERFACE)
+		src = iface ? &iface->stats : &net_stats;
+#else
+		src = &net_stats;
+#endif
 		break;
 	case NET_REQUEST_STATS_CMD_GET_PROCESSING_ERROR:
 		len_chk = sizeof(net_stats_t);
-		src = &iface->stats.processing_error;
+		src = GET_STAT_ADDR(iface, processing_error);
 		break;
 	case NET_REQUEST_STATS_CMD_GET_BYTES:
 		len_chk = sizeof(struct net_stats_bytes);
-		src = &iface->stats.bytes;
+		src = GET_STAT_ADDR(iface, bytes);
 		break;
 	case NET_REQUEST_STATS_CMD_GET_IP_ERRORS:
 		len_chk = sizeof(struct net_stats_ip_errors);
-		src = &iface->stats.ip_errors;
+		src = GET_STAT_ADDR(iface, ip_errors);
 		break;
 #if defined(CONFIG_NET_STATISTICS_IPV4)
 	case NET_REQUEST_STATS_CMD_GET_IPV4:
 		len_chk = sizeof(struct net_stats_ip);
-		src = &iface->stats.ipv4;
+		src = GET_STAT_ADDR(iface, ipv4);
 		break;
 #endif
 #if defined(CONFIG_NET_STATISTICS_IPV6)
 	case NET_REQUEST_STATS_CMD_GET_IPV6:
 		len_chk = sizeof(struct net_stats_ip);
-		src = &iface->stats.ipv6;
+		src = GET_STAT_ADDR(iface, ipv6);
 		break;
 #endif
 #if defined(CONFIG_NET_STATISTICS_IPV6_ND)
 	case NET_REQUEST_STATS_CMD_GET_IPV6_ND:
 		len_chk = sizeof(struct net_stats_ipv6_nd);
-		src = &iface->stats.ipv6_nd;
+		src = GET_STAT_ADDR(iface, ipv6_nd);
 		break;
 #endif
 #if defined(CONFIG_NET_STATISTICS_ICMP)
 	case NET_REQUEST_STATS_CMD_GET_ICMP:
 		len_chk = sizeof(struct net_stats_icmp);
-		src = &iface->stats.icmp;
+		src = GET_STAT_ADDR(iface, icmp);
 		break;
 #endif
 #if defined(CONFIG_NET_STATISTICS_UDP)
 	case NET_REQUEST_STATS_CMD_GET_UDP:
 		len_chk = sizeof(struct net_stats_udp);
-		src = &iface->stats.udp;
+		src = GET_STAT_ADDR(iface, udp);
 		break;
 #endif
 #if defined(CONFIG_NET_STATISTICS_TCP)
 	case NET_REQUEST_STATS_CMD_GET_TCP:
 		len_chk = sizeof(struct net_stats_tcp);
-		src = &iface->stats.tcp;
+		src = GET_STAT_ADDR(iface, tcp);
 		break;
 #endif
 #if defined(CONFIG_NET_STATISTICS_RPL)
 	case NET_REQUEST_STATS_CMD_GET_RPL:
 		len_chk = sizeof(struct net_stats_rpl);
-		src = &iface->stats.rpl;
+		src = GET_STAT_ADDR(iface, rpl);
 		break;
 #endif
 	}
@@ -327,7 +329,7 @@ static int net_stats_get(u32_t mgmt_request, struct net_if *iface,
 		return -EINVAL;
 	}
 
-	memcpy(src, data, len);
+	memcpy(data, src, len);
 
 	return 0;
 }
