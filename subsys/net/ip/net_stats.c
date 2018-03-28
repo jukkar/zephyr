@@ -14,6 +14,7 @@
 #include <string.h>
 #include <errno.h>
 #include <net/net_core.h>
+#include <net/ethernet.h>
 
 #include "net_stats.h"
 
@@ -323,6 +324,20 @@ static int net_stats_get(u32_t mgmt_request, struct net_if *iface,
 		src = GET_STAT_ADDR(iface, rpl);
 		break;
 #endif
+#if defined(CONFIG_NET_STATISTICS_ETHERNET)
+	case NET_REQUEST_STATS_CMD_GET_ETHERNET: {
+		const struct ethernet_api *eth;
+
+		if (net_if_l2(iface) != &NET_L2_GET_NAME(ETHERNET)) {
+			return -ENOENT;
+		}
+
+		eth = net_if_get_device(iface)->driver_api;
+		len_chk = sizeof(struct net_stats_eth);
+		src = eth->stats;
+		break;
+	}
+#endif
 	}
 
 	if (len != len_chk || !src) {
@@ -378,6 +393,11 @@ NET_MGMT_REGISTER_REQUEST_HANDLER(NET_REQUEST_STATS_GET_TCP,
 
 #if defined(CONFIG_NET_STATISTICS_RPL)
 NET_MGMT_REGISTER_REQUEST_HANDLER(NET_REQUEST_STATS_GET_RPL,
+				  net_stats_get);
+#endif
+
+#if defined(CONFIG_NET_STATISTICS_ETHERNET)
+NET_MGMT_REGISTER_REQUEST_HANDLER(NET_REQUEST_STATS_GET_ETHERNET,
 				  net_stats_get);
 #endif
 
