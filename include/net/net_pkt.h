@@ -26,6 +26,8 @@
 #include <net/net_ip.h>
 #include <net/net_if.h>
 #include <net/net_context.h>
+#include <net/vlan.h>
+#include <net/gptp.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -71,6 +73,19 @@ struct net_pkt {
 
 #if defined(CONFIG_NET_ROUTING)
 	struct net_if *orig_iface; /* Original network interface */
+#endif
+
+#if defined(CONFIG_NET_PKT_TIMESTAMP)
+	/** Timestamp if available. */
+	struct net_ptp_time timestamp;
+#if defined(CONFIG_NET_STATISTICS)
+	/** This is used for collecting statistics. This is updated by
+	 * the driver so it is not fully accurate. This is done using hw cycles
+	 * as we do not have an API that would return time in nanoseconds.
+	 */
+	u32_t cycles_create;
+	u32_t cycles_update;
+#endif
 #endif
 
 	u8_t *appdata;	/* application data starts here */
@@ -148,7 +163,19 @@ struct net_pkt {
 	 * is not prioritised.
 	 */
 	u8_t priority;
+
+	/** Traffic class value. */
+	u8_t traffic_class;
 #endif
+
+#if defined(CONFIG_NET_VLAN)
+	/* VLAN TCI (Tag Control Information). This contains the Priority
+	 * Code Point (PCP), Drop Eligible Indicator (DEI) and VLAN
+	 * Identifier (VID, called more commonly VLAN tag). This value is
+	 * kept in host byte order.
+	 */
+	u16_t vlan_tci;
+#endif /* CONFIG_NET_VLAN */
 	/* @endcond */
 
 	/** Reference counter */
@@ -409,19 +436,148 @@ static inline void net_pkt_set_priority(struct net_pkt *pkt,
 {
 	pkt->priority = priority;
 }
+
+static inline u8_t net_pkt_traffic_class(struct net_pkt *pkt)
+{
+	return pkt->traffic_class;
+}
+
+static inline void net_pkt_set_traffic_class(struct net_pkt *pkt, u8_t tc)
+{
+	pkt->traffic_class = tc;
+}
 #else
 static inline u8_t net_pkt_priority(struct net_pkt *pkt)
 {
 	return 0;
 }
 
-static inline void net_pkt_set_priority(struct net_pkt *pkt,
-					u8_t priority)
+static inline u8_t net_pkt_traffic_class(struct net_pkt *pkt)
 {
 	ARG_UNUSED(pkt);
-	ARG_UNUSED(priority);
+	return 0;
+}
+
+static inline void net_pkt_set_traffic_class(struct net_pkt *pkt, u8_t tc)
+{
+	ARG_UNUSED(pkt);
+	ARG_UNUSED(tc);
 }
 #endif
+
+#if defined(CONFIG_NET_VLAN)
+static inline u16_t net_pkt_vlan_tag(struct net_pkt *pkt)
+{
+	return net_eth_get_vid(pkt->vlan_tci);
+}
+
+static inline void net_pkt_set_vlan_tag(struct net_pkt *pkt, u16_t tag)
+{
+	pkt->vlan_tci = net_eth_set_vid(pkt->vlan_tci, tag);
+}
+
+static inline u8_t net_pkt_vlan_priority(struct net_pkt *pkt)
+{
+	return net_eth_get_pcp(pkt->vlan_tci);
+}
+
+static inline void net_pkt_set_vlan_priority(struct net_pkt *pkt,
+					     u8_t priority)
+{
+	pkt->vlan_tci = net_eth_set_pcp(pkt->vlan_tci, priority);
+}
+
+static inline bool net_pkt_vlan_dei(struct net_pkt *pkt)
+{
+	return net_eth_get_dei(pkt->vlan_tci);
+}
+
+static inline void net_pkt_set_vlan_dei(struct net_pkt *pkt, bool dei)
+{
+	pkt->vlan_tci = net_eth_set_dei(pkt->vlan_tci, dei);
+}
+
+static inline void net_pkt_set_vlan_tci(struct net_pkt *pkt, u16_t tci)
+{
+	pkt->vlan_tci = tci;
+}
+
+static inline u16_t net_pkt_vlan_tci(struct net_pkt *pkt)
+{
+	return pkt->vlan_tci;
+}
+#else
+static inline u16_t net_pkt_vlan_tag(struct net_pkt *pkt)
+{
+	return NET_VLAN_TAG_UNSPEC;
+}
+
+static inline void net_pkt_set_vlan_tag(struct net_pkt *pkt, u16_t tag)
+{
+	ARG_UNUSED(pkt);
+	ARG_UNUSED(tag);
+}
+
+static inline u8_t net_pkt_vlan_priority(struct net_pkt *pkt)
+{
+	ARG_UNUSED(pkt);
+	return 0;
+}
+
+static inline bool net_pkt_vlan_dei(struct net_pkt *pkt)
+{
+	return false;
+}
+
+static inline void net_pkt_set_vlan_dei(struct net_pkt *pkt, bool dei)
+{
+	ARG_UNUSED(pkt);
+	ARG_UNUSED(dei);
+}
+
+static inline u16_t net_pkt_vlan_tci(struct net_pkt *pkt)
+{
+	return NET_VLAN_TAG_UNSPEC; /* assumes priority is 0 */
+}
+
+static inline void net_pkt_set_vlan_tci(struct net_pkt *pkt, u16_t tci)
+{
+	ARG_UNUSED(pkt);
+	ARG_UNUSED(tci);
+}
+#endif
+
+#if defined(CONFIG_NET_PKT_TIMESTAMP)
+static inline struct net_ptp_time *net_pkt_timestamp(struct net_pkt *pkt)
+{
+	return &pkt->timestamp;
+}
+
+static inline void net_pkt_set_timestamp(struct net_pkt *pkt,
+					 struct net_ptp_time *timestamp)
+{
+	pkt->timestamp.second = timestamp->second;
+	pkt->timestamp.nanosecond = timestamp->nanosecond;
+
+#if defined(CONFIG_NET_STATISTICS)
+	pkt->cycles_update = k_cycle_get_32();
+#endif
+}
+#else
+static inline struct net_ptp_time *net_pkt_timestamp(struct net_pkt *pkt)
+{
+	ARG_UNUSED(pkt);
+
+	return NULL;
+}
+
+static inline void net_pkt_set_timestamp(struct net_pkt *pkt,
+					 struct net_ptp_time *timestamp)
+{
+	ARG_UNUSED(pkt);
+	ARG_UNUSED(timestamp);
+}
+#endif /* CONFIG_NET_PKT_TIMESTAMP */
 
 static inline size_t net_pkt_get_len(struct net_pkt *pkt)
 {

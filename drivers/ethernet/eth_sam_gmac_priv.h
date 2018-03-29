@@ -175,9 +175,14 @@ struct eth_sam_dev_cfg {
 	struct phy_sam_gmac_dev phy;
 };
 
+struct ifaces {
+	struct net_if *iface;
+	u16_t vlan_tag;
+};
+
 /* Device run time data */
 struct eth_sam_dev_data {
-	struct net_if *iface;
+	struct ifaces ifaces[NET_VLAN_MAX_COUNT];
 	u8_t mac_addr[6];
 	struct gmac_queue queue_list[GMAC_QUEUE_NO];
 };

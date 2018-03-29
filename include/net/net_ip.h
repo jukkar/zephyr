@@ -32,6 +32,9 @@
 extern "C" {
 #endif
 
+/* Specifying VLAN tag here in order to avoid circular dependencies */
+#define NET_VLAN_TAG_UNSPEC 0x0fff
+
 /** Protocol families */
 #define PF_UNSPEC	0	/* Unspecified.  */
 #define PF_INET		2	/* IP protocol family.  */
@@ -58,8 +61,10 @@ enum net_sock_type {
 
 #define ntohs(x) sys_be16_to_cpu(x)
 #define ntohl(x) sys_be32_to_cpu(x)
+#define ntohll(x) sys_be64_to_cpu(x)
 #define htons(x) sys_cpu_to_be16(x)
 #define htonl(x) sys_cpu_to_be32(x)
+#define htonll(x) sys_cpu_to_be64(x)
 
 /** IPv6 address structure */
 struct in6_addr {
@@ -977,6 +982,20 @@ int net_tx_priority2tc(enum net_priority prio);
  * @return Rx traffic class that handles that priority network traffic.
  */
 int net_rx_priority2tc(enum net_priority prio);
+
+/**
+ * @brief Convert network packet VLAN priority to network packet priority so we
+ * can place the packet into correct queue.
+ *
+ * @param priority VLAN priority
+ *
+ * @return Network priority
+ */
+static inline enum net_priority net_vlan2priority(u8_t priority)
+{
+	/* Currently this is 1:1 mapping */
+	return priority;
+}
 
 #ifdef __cplusplus
 }

@@ -200,7 +200,8 @@ static void tcp_retry_expired(struct k_work *work)
 				tcp->retry_timeout_shift, tcp, pkt);
 			if (IS_ENABLED(CONFIG_NET_STATISTICS_TCP) &&
 			    !is_6lo_technology(pkt)) {
-				net_stats_update_tcp_seg_rexmit();
+				net_stats_update_tcp_seg_rexmit(
+							net_pkt_iface(pkt));
 			}
 		}
 	} else if (IS_ENABLED(CONFIG_NET_TCP_TIME_WAIT)) {
@@ -774,7 +775,7 @@ int net_tcp_queue_data(struct net_context *context, struct net_pkt *pkt)
 
 	context->tcp->send_seq += data_len;
 
-	net_stats_update_tcp_sent(data_len);
+	net_stats_update_tcp_sent(net_pkt_iface(pkt), data_len);
 
 	sys_slist_append(&context->tcp->sent_list, &pkt->sent_list);
 
@@ -872,7 +873,8 @@ int net_tcp_send_pkt(struct net_pkt *pkt)
 			if (ret < 0) {
 				net_pkt_unref(new_pkt);
 			} else {
-				net_stats_update_tcp_seg_rexmit();
+				net_stats_update_tcp_seg_rexmit(
+							net_pkt_iface(pkt));
 			}
 
 			return ret;
@@ -948,7 +950,7 @@ bool net_tcp_ack_received(struct net_context *ctx, u32_t ack)
 
 	if (net_tcp_seq_greater(ack, ctx->tcp->send_seq)) {
 		NET_ERR("ctx %p: ACK for unsent data", ctx);
-		net_stats_update_tcp_seg_ackerr();
+		net_stats_update_tcp_seg_ackerr(net_context_get_iface(ctx));
 		/* RFC 793 doesn't say that invalid ack sequence is an error
 		 * in the general case, but we implement tighter checking,
 		 * and consider entire packet invalid.

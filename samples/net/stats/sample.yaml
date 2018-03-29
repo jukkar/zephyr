@@ -1,0 +1,8 @@
+common:
+  tags: net statistics
+sample:
+  description: Test network statistics functionality
+  name: Network statistics sample app
+tests:
+  test:
+    min_ram: 64

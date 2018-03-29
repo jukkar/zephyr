@@ -13,6 +13,7 @@
 #include <kernel.h>
 #include <linker/sections.h>
 #include <string.h>
+#include <stdlib.h>
 #include <net/net_core.h>
 #include <net/net_pkt.h>
 #include <net/net_if.h>
@@ -69,6 +70,24 @@ static sys_slist_t link_callbacks;
 static sys_slist_t mcast_monitor_callbacks;
 #endif
 
+#if defined(CONFIG_NET_PKT_TIMESTAMP)
+#if !defined(CONFIG_NET_PKT_TIMESTAMP_STACK_SIZE)
+#define CONFIG_NET_PKT_TIMESTAMP_STACK_SIZE 1024
+#endif
+
+NET_STACK_DEFINE(TIMESTAMP, tx_ts_stack,
+		 CONFIG_NET_PKT_TIMESTAMP_STACK_SIZE,
+		 CONFIG_NET_PKT_TIMESTAMP_STACK_SIZE);
+K_FIFO_DEFINE(tx_ts_queue);
+
+static struct k_thread tx_thread_ts;
+
+/* We keep track of the timestamp callbacks in this list.
+ */
+static sys_slist_t timestamp_callbacks;
+static int timestamp_enabled;
+#endif /* CONFIG_NET_PKT_TIMESTAMP */
+
 #if defined(CONFIG_NET_DEBUG_IF)
 #if defined(CONFIG_NET_STATISTICS)
 #define debug_check_packet(pkt)						\
@@ -106,12 +125,12 @@ static inline void net_context_send_cb(struct net_context *context,
 
 #if defined(CONFIG_NET_UDP)
 	if (net_context_get_ip_proto(context) == IPPROTO_UDP) {
-		net_stats_update_udp_sent();
+		net_stats_update_udp_sent(net_context_get_iface(context));
 	} else
 #endif
 #if defined(CONFIG_NET_TCP)
 	if (net_context_get_ip_proto(context) == IPPROTO_TCP) {
-		net_stats_update_tcp_seg_sent();
+		net_stats_update_tcp_seg_sent(net_context_get_iface(context));
 	} else
 #endif
 	{
@@ -156,7 +175,7 @@ static bool net_if_tx(struct net_if *iface, struct net_pkt *pkt)
 
 		net_pkt_unref(pkt);
 	} else {
-		net_stats_update_bytes_sent(pkt->total_pkt_len);
+		net_stats_update_bytes_sent(iface, pkt->total_pkt_len);
 	}
 
 	if (context) {
@@ -192,14 +211,16 @@ void net_if_queue_tx(struct net_if *iface, struct net_pkt *pkt)
 #if defined(CONFIG_NET_STATISTICS)
 	pkt->total_pkt_len = net_pkt_get_len(pkt);
 
-	net_stats_update_tc_sent_pkt(tc);
-	net_stats_update_tc_sent_bytes(tc, pkt->total_pkt_len);
-	net_stats_update_tc_sent_priority(tc, prio);
+	net_stats_update_tc_sent_pkt(iface, tc);
+	net_stats_update_tc_sent_bytes(iface, tc, pkt->total_pkt_len);
+	net_stats_update_tc_sent_priority(iface, tc, prio);
 #endif
 
 #if NET_TC_TX_COUNT > 1
 	NET_DBG("TC %d with prio %d pkt %p", tc, prio, pkt);
 #endif
+
+	net_pkt_set_traffic_class(pkt, tc);
 
 	net_tc_submit_to_tx_queue(tc, pkt);
 }
@@ -1734,6 +1755,22 @@ bool net_if_ipv4_addr_mask_cmp(struct net_if *iface,
 	return false;
 }
 
+struct net_if *net_if_ipv4_select_src_iface(struct in_addr *dst)
+{
+	struct net_if *iface;
+
+	for (iface = __net_if_start; iface != __net_if_end; iface++) {
+		bool ret;
+
+		ret = net_if_ipv4_addr_mask_cmp(iface, dst);
+		if (ret) {
+			return iface;
+		}
+	}
+
+	return net_if_get_default();
+}
+
 struct net_if_addr *net_if_ipv4_addr_lookup(const struct in_addr *addr,
 					    struct net_if **ret)
 {
@@ -2138,6 +2175,96 @@ done:
 	return 0;
 }
 
+#if defined(CONFIG_NET_PKT_TIMESTAMP)
+#if defined(CONFIG_NET_STATISTICS)
+void net_if_update_rx_timestamp_stats(struct net_pkt *pkt)
+{
+	u32_t now = k_cycle_get_32();
+	s32_t diff = (s32_t)(now - pkt->cycles_update);
+
+	diff = abs(diff);
+
+	net_stats_update_pkt_rx_timestamp(net_pkt_traffic_class(pkt),
+					  SYS_CLOCK_HW_CYCLES_TO_NS64(diff));
+}
+
+void net_if_update_tx_timestamp_stats(struct net_pkt *pkt)
+{
+	s32_t diff = (s32_t)(pkt->cycles_update - pkt->cycles_create);
+
+	diff = abs(diff);
+
+	net_stats_update_pkt_tx_timestamp(net_pkt_traffic_class(pkt),
+					  SYS_CLOCK_HW_CYCLES_TO_NS64(diff));
+}
+#endif /* CONFIG_NET_STATISTICS */
+
+static void net_tx_ts_thread(void)
+{
+	struct net_pkt *pkt;
+
+	NET_DBG("Starting TX timestamp callback thread");
+
+	while (1) {
+		pkt = k_fifo_get(&tx_ts_queue, K_FOREVER);
+		if (pkt) {
+			net_if_update_tx_timestamp_stats(pkt);
+
+			net_if_call_timestamp_cb(pkt);
+		}
+
+		k_yield();
+	}
+}
+
+void net_if_register_timestamp_cb(struct net_if_timestamp_cb *timestamp,
+			     struct net_if *iface,
+			     net_if_timestamp_callback_t cb)
+{
+	sys_slist_find_and_remove(&timestamp_callbacks, &timestamp->node);
+	sys_slist_prepend(&timestamp_callbacks, &timestamp->node);
+
+	timestamp->iface = iface;
+	timestamp->cb = cb;
+	timestamp_enabled++;
+}
+
+void net_if_unregister_timestamp_cb(struct net_if_timestamp_cb *timestamp)
+{
+	sys_slist_find_and_remove(&timestamp_callbacks, &timestamp->node);
+
+	timestamp_enabled--;
+	if (timestamp_enabled <= 0) {
+		timestamp_enabled = 0;
+	}
+}
+
+void net_if_call_timestamp_cb(struct net_pkt *pkt)
+{
+	sys_snode_t *sn, *sns;
+
+	SYS_SLIST_FOR_EACH_NODE_SAFE(&timestamp_callbacks, sn, sns) {
+		struct net_if_timestamp_cb *timestamp =
+			CONTAINER_OF(sn, struct net_if_timestamp_cb, node);
+
+		if ((timestamp->iface == NULL) ||
+				(timestamp->iface == net_pkt_iface(pkt))) {
+			timestamp->cb(pkt);
+		}
+	}
+}
+
+void net_if_add_tx_timestamp(struct net_pkt *pkt)
+{
+	/* No need to proceed if there are no one interested in this info */
+	if (timestamp_enabled == 0) {
+		return;
+	}
+
+	k_fifo_put(&tx_ts_queue, pkt);
+}
+#endif /* CONFIG_NET_PKT_TIMESTAMP */
+
 void net_if_init(void)
 {
 	struct net_if *iface;
@@ -2192,6 +2319,31 @@ void net_if_init(void)
 #endif
 	}
 #endif /* CONFIG_NET_IPV6 */
+
+#if defined(CONFIG_NET_PKT_TIMESTAMP)
+	k_thread_create(&tx_thread_ts, tx_ts_stack,
+			K_THREAD_STACK_SIZEOF(tx_ts_stack),
+			(k_thread_entry_t)net_tx_ts_thread,
+			NULL, NULL, NULL, K_PRIO_PREEMPT(1), 0, 0);
+#endif /* CONFIG_NET_PKT_TIMESTAMP */
+
+#if defined(CONFIG_NET_VLAN)
+	/* Make sure that we do not have too many network interfaces
+	 * compared to the number of VLAN interfaces.
+	 */
+	for (iface = __net_if_start, if_count = 0;
+	     iface != __net_if_end; iface++) {
+		if (net_if_l2(iface) == &NET_L2_GET_NAME(ETHERNET)) {
+			if_count++;
+		}
+	}
+
+	if (if_count > CONFIG_NET_VLAN_COUNT) {
+		NET_WARN("You have configured only %d VLAN interfaces"
+			 " but you have %d network interfaces.",
+			 CONFIG_NET_VLAN_COUNT, if_count);
+	}
+#endif
 }
 
 void net_if_post_init(void)
