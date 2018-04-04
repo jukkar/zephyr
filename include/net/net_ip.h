@@ -32,6 +32,9 @@
 extern "C" {
 #endif
 
+/* Specifying VLAN tag here in order to avoid circular dependencies */
+#define NET_VLAN_TAG_UNSPEC 0x0fff
+
 /** Protocol families */
 #define PF_UNSPEC	0	/* Unspecified.  */
 #define PF_INET		2	/* IP protocol family.  */
@@ -977,6 +980,20 @@ int net_tx_priority2tc(enum net_priority prio);
  * @return Rx traffic class that handles that priority network traffic.
  */
 int net_rx_priority2tc(enum net_priority prio);
+
+/**
+ * @brief Convert network packet VLAN priority to network packet priority so we
+ * can place the packet into correct queue.
+ *
+ * @param priority VLAN priority
+ *
+ * @return Network priority
+ */
+static inline enum net_priority net_vlan2priority(u8_t priority)
+{
+	/* Currently this is 1:1 mapping */
+	return priority;
+}
 
 #ifdef __cplusplus
 }

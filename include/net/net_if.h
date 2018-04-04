@@ -358,7 +358,6 @@ struct net_if_dev {
 	 */
 	struct net_offload *offload;
 #endif /* CONFIG_NET_OFFLOAD */
-
 };
 
 /**
@@ -1364,6 +1363,17 @@ bool net_if_ipv4_addr_mask_cmp(struct net_if *iface,
 			       struct in_addr *addr);
 
 /**
+ * @brief Get a network interface that should be used when sending
+ * IPv4 network data to destination.
+ *
+ * @param dst IPv4 destination address
+ *
+ * @return Pointer to network interface to use, NULL if no suitable interface
+ * could be found.
+ */
+struct net_if *net_if_ipv4_select_src_iface(struct in_addr *dst);
+
+/**
  * @brief Set IPv4 netmask for an interface.
  *
  * @param iface Interface to use.
@@ -1576,18 +1586,18 @@ struct net_if_api {
 #define NET_IF_GET(dev_name, sfx)					\
 	((struct net_if *)&NET_IF_GET_NAME(dev_name, sfx))
 
-#define NET_IF_INIT(dev_name, sfx, _l2, _mtu)				\
-	static struct net_if_dev (NET_IF_DEV_GET_NAME(dev_name, sfx)) __used \
-	__attribute__((__section__(".net_if_dev.data"))) = {		\
-		.dev = &(__device_##dev_name),				\
+#define NET_IF_INIT(dev_name, sfx, _l2, _mtu, _num_configs)		\
+	static struct net_if_dev (NET_IF_DEV_GET_NAME(dev_name, sfx))	\
+	__used __attribute__((__section__(".net_if_dev.data"))) = {	\
+		.dev = &(DEVICE_NAME_GET(dev_name)),			\
 		.l2 = &(NET_L2_GET_NAME(_l2)),				\
 		.l2_data = &(NET_L2_GET_DATA(dev_name, sfx)),		\
 		.mtu = _mtu,						\
 	};								\
 	static struct net_if						\
-	(NET_IF_GET_NAME(dev_name, sfx))[NET_IF_MAX_CONFIGS] __used	\
+	(NET_IF_GET_NAME(dev_name, sfx))[_num_configs] __used		\
 	__attribute__((__section__(".net_if.data"))) = {		\
-		[0 ... (NET_IF_MAX_CONFIGS - 1)] = {			\
+		[0 ... (_num_configs - 1)] = {				\
 			.if_dev = &(NET_IF_DEV_GET_NAME(dev_name, sfx)), \
 			NET_IF_CONFIG_INIT				\
 		}							\
@@ -1601,7 +1611,7 @@ struct net_if_api {
 	DEVICE_AND_API_INIT(dev_name, drv_name, init_fn, data,	\
 			    cfg_info, POST_KERNEL, prio, api);	\
 	NET_L2_DATA_INIT(dev_name, 0, l2_ctx_type);		\
-	NET_IF_INIT(dev_name, 0, l2, mtu)
+	NET_IF_INIT(dev_name, 0, l2, mtu, NET_IF_MAX_CONFIGS)
 
 /**
  * If your network device needs more than one instance of a network interface,
@@ -1614,7 +1624,7 @@ struct net_if_api {
 	DEVICE_AND_API_INIT(dev_name, drv_name, init_fn, data,		\
 			    cfg_info, POST_KERNEL, prio, api);		\
 	NET_L2_DATA_INIT(dev_name, instance, l2_ctx_type);		\
-	NET_IF_INIT(dev_name, instance, l2, mtu)
+	NET_IF_INIT(dev_name, instance, l2, mtu, NET_IF_MAX_CONFIGS)
 
 #ifdef __cplusplus
 }
