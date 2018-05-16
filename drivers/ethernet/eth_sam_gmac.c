@@ -560,6 +560,32 @@ static int get_mck_clock_divisor(u32_t mck)
 	return mck_divisor;
 }
 
+#if GMAC_PRIORITY_QUEUE_NO == 2
+static int setup_qav_delta_bandwidth(Gmac *gmac, int queue_id, int queue_share)
+{
+	u32_t total_bw;
+	u32_t shares[2];
+
+	/* See if we operate in 10Mbps or 100Mbps mode */
+	if (gmac->GMAC_NCFGR & GMAC_NCFGR_SPD) {
+		/* 100Mbps */
+		total_bw = (100 * 1000 * 1000) / 8;
+	} else {
+		/* 10Mbps */
+		total_bw = (10 * 1000 * 1000) / 8;
+	}
+
+	shares[0] = (total_bw * queue_share)/100;
+	shares[1] = total_bw - shares[0];
+
+	/* Queue ID already validated, safe to just assing values */
+	gmac->GMAC_CBSISQA = shares[(queue_id - 1)];
+	gmac->GMAC_CBSISQB = shares[(queue_id) % 2];
+
+	return 0;
+}
+#endif
+
 static int gmac_init(Gmac *gmac, u32_t gmac_ncfgr_val)
 {
 	int mck_divisor;
@@ -600,6 +626,14 @@ static int gmac_init(Gmac *gmac, u32_t gmac_ncfgr_val)
 	gmac->GMAC_TN = 0;
 	gmac->GMAC_TSH = 0;
 	gmac->GMAC_TSL = 0;
+#endif
+
+#if GMAC_PRIORITY_QUEUE_NO == 2
+	/* Enable Qav */
+	gmac->GMAC_CBSCR = GMAC_CBSCR_QAE | GMAC_CBSCR_QBE;
+
+	/* Setup 75% - 25% shares initially as suggested by 802.1Q */
+	setup_qav_delta_bandwidth(gmac, 2, 75);
 #endif
 
 	return 0;
@@ -1380,7 +1414,69 @@ static enum ethernet_hw_caps eth_sam_gmac_get_capabilities(struct device *dev)
 #if defined(CONFIG_PTP_CLOCK_SAM_GMAC)
 		ETHERNET_PTP |
 #endif
-		ETHERNET_LINK_100BASE_T;
+		ETHERNET_LINK_100BASE_T | ETHERNET_QAV;
+}
+
+static int eth_sam_gmac_set_config(struct device *dev,
+				   enum ethernet_config_type type,
+				   const struct ethernet_config *config)
+{
+#if GMAC_PRIORITY_QUEUE_NO == 2
+	const struct eth_sam_dev_cfg *const cfg = DEV_CFG(dev);
+	Gmac *gmac = cfg->regs;
+	int queue_id;
+	unsigned int delta_bandwidth;
+	unsigned int idle_slope;
+#endif
+
+	switch (type) {
+	case ETHERNET_CONFIG_TYPE_QAV_DELTA_BANDWIDTH:
+#if GMAC_PRIORITY_QUEUE_NO < 2
+		SYS_LOG_DBG("Cannot use Qav without both priority queues");
+
+		return -EINVAL;
+#else
+		queue_id = config->qav_queue_param.queue_id;
+
+		/* See if the request is made for a priority queue */
+		if (queue_id == 0) {
+			return -EINVAL;
+		}
+
+		if (queue_id > GMAC_PRIORITY_QUEUE_NO) {
+			return -EINVAL;
+		}
+
+		delta_bandwidth = config->qav_queue_param.delta_bandwidth;
+
+		return setup_qav_delta_bandwidth(gmac, queue_id,
+						 delta_bandwidth);
+#endif
+	case ETHERNET_CONFIG_TYPE_QAV_IDLE_SLOPE:
+#if GMAC_PRIORITY_QUEUE_NO < 2
+		SYS_LOG_DBG("Cannot use Qav without both priority queues");
+
+		return -EINVAL;
+#else
+		queue_id = config->qav_queue_param.queue_id;
+		idle_slope = config->qav_queue_param.idle_slope;
+
+		switch (queue_id) {
+		case 1:
+			gmac->GMAC_CBSISQA = idle_slope;
+			return 0;
+		case 2:
+			gmac->GMAC_CBSISQB = idle_slope;
+			return 0;
+		default:
+			/* Invalid queue id */
+			return -EINVAL;
+		}
+#endif
+	default:
+		/* Should never be here */
+		return -ENOTSUP;
+	}
 }
 
 #if defined(CONFIG_PTP_CLOCK_SAM_GMAC)
@@ -1397,6 +1493,7 @@ static const struct ethernet_api eth_api = {
 	.iface_api.send = eth_tx,
 
 	.get_capabilities = eth_sam_gmac_get_capabilities,
+	.set_config = eth_sam_gmac_set_config,
 
 #if defined(CONFIG_PTP_CLOCK_SAM_GMAC)
 	.get_ptp_clock = eth_sam_gmac_get_ptp_clock,
