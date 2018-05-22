@@ -27,6 +27,7 @@ extern "C" {
 #define GPTP_MULTIPLE_PDELAY_RESP_WAIT K_MINUTES(5)
 
 #define USCALED_NS_TO_MS(val) ((val >> 16) / 1000000)
+#define USCALED_NS_TO_NS(val) (val >> 16)
 
 #if defined(CONFIG_NET_GPTP_STATISTICS)
 #define GPTP_STATS_INC(port, var) (GPTP_PORT_PARAM_DS(port)->var++)

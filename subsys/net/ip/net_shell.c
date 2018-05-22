@@ -2078,7 +2078,31 @@ int net_shell_cmd_gptp(int argc, char *argv[])
 		arg++;
 	}
 
-	if (argv[arg]) {
+	if (argv[arg] && !strcmp(argv[arg], "monitor")) {
+#if defined(CONFIG_NET_GPTP_STATISTICS)
+		arg++;
+
+		if (argv[arg]) {
+			/* Print monitor information every n seconds */
+			int seconds = strtol(argv[arg], NULL, 10);
+
+			gptp_monitor(seconds);
+
+			printk("Priting gPTP performance statistics every %d "
+			       "seconds.\n", seconds);
+		} else {
+			/* Turn monitoring off */
+			gptp_monitor(0);
+
+			printk("Disable gPTP statistics printing.\n");
+		}
+
+#else /* CONFIG_NET_GPTP_STATISTICS */
+		printk("Enable CONFIG_NET_GPTP_STATISTICS to activate "
+		       "monitoring.\n");
+#endif /* CONFIG_NET_GPTP_STATISTICS */
+
+	} else if (argv[arg]) {
 		char *endptr;
 		int port = strtol(argv[arg], &endptr, 10);
 

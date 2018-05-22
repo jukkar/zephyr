@@ -119,8 +119,12 @@ config NET_GPTP_PATH_TRACE_ELEMENTS
 config NET_GPTP_STATISTICS
 	bool "Collect gPTP statistics"
 	default n
+	select NEWLIB_LIBC
+	select NEWLIB_LIBC_FLOAT_PRINTF
 	help
 	  Enable this if you need to collect gPTP statistics. The statistics
-	  can be seen in net-shell if needed.
+	  can be seen in net-shell if needed. Statistics printing requires
+	  print %f formatter and working sqrt() function thus this option
+	  enables also newlib support.
 
 endif
