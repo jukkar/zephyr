@@ -608,6 +608,17 @@ static void gptp_mi_clk_slave_sync_compute(void)
 }
 
 #if defined(CONFIG_NET_GPTP_USE_DEFAULT_CLOCK_UPDATE)
+#if defined(CONFIG_NET_GPTP_STATISTICS)
+static void update_offset_stats(int port, s64_t nanosecond_diff)
+{
+	struct gptp_port_param_ds *port_param_ds = GPTP_PORT_PARAM_DS(port);
+
+	gptp_stats_add_value(&port_param_ds->stats_offset, nanosecond_diff);
+}
+#else
+#define update_offset_stats(port, nanosecond_diff)
+#endif /* CONFIG_NET_GPTP_STATISTICS */
+
 static void gptp_update_local_port_clock(void)
 {
 	struct gptp_clk_slave_sync_state *state;
@@ -674,6 +685,8 @@ static void gptp_update_local_port_clock(void)
 		}
 
 		ptp_clock_adjust(clk, nanosecond_diff);
+
+		update_offset_stats(port, nanosecond_diff);
 	}
 }
 #endif /* CONFIG_NET_GPTP_USE_DEFAULT_CLOCK_UPDATE */

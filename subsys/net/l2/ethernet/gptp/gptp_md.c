@@ -9,6 +9,8 @@
 #define NET_LOG_ENABLED 1
 #endif
 
+#include <stdlib.h>
+
 #include "gptp_messages.h"
 #include "gptp_md.h"
 #include "gptp_data_set.h"
@@ -263,6 +265,25 @@ static void gptp_md_compute_pdelay_rate_ratio(int port)
 	port_ds->neighbor_rate_ratio_valid = state->neighbor_rate_ratio_valid;
 }
 
+#if defined(CONFIG_NET_GPTP_STATISTICS)
+static void gptp_stats_calc(int port)
+{
+	struct gptp_port_param_ds *port_param_ds = GPTP_PORT_PARAM_DS(port);
+	struct gptp_port_ds *port_ds = GPTP_PORT_DS(port);
+
+	if (port_ds->neighbor_rate_ratio_valid) {
+		gptp_stats_add_value(&port_param_ds->stats_freq,
+				     port_ds->neighbor_rate_ratio);
+	}
+
+	gptp_stats_add_value(&port_param_ds->stats_delay,
+			     port_ds->neighbor_prop_delay);
+}
+
+#else /* CONFIG_NET_GPTP_STATISTICS */
+#define gptp_stats_calc(...)
+#endif /* CONFIG_NET_GPTP_STATISTICS */
+
 static void gptp_md_compute_prop_time(int port)
 {
 	u64_t t1_ns = 0, t2_ns = 0, t3_ns = 0, t4_ns = 0;
@@ -320,6 +341,8 @@ static void gptp_md_compute_prop_time(int port)
 	prop_time /= 2;
 
 	port_ds->neighbor_prop_delay = prop_time;
+
+	gptp_stats_calc(port);
 }
 
 static void gptp_md_pdelay_compute(int port)

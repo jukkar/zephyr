@@ -9,6 +9,12 @@
 #define NET_LOG_ENABLED 1
 #endif
 
+#if defined(CONFIG_NET_GPTP_STATISTICS)
+#include <stdlib.h>
+#include <stdio.h>
+#include <math.h>
+#endif
+
 #include <net/net_pkt.h>
 #include <ptp_clock.h>
 
@@ -39,6 +45,13 @@ K_FIFO_DEFINE(gptp_rx_queue);
 
 static struct k_thread gptp_thread_data;
 struct gptp_domain gptp_domain;
+
+#if defined(CONFIG_NET_GPTP_STATISTICS)
+static void reset_stats(struct gptp_stats *stats);
+static void gptp_print_stats(int port);
+#else
+#define gptp_print_stats(...)
+#endif
 
 int gptp_get_port_number(struct net_if *iface)
 {
@@ -322,6 +335,8 @@ static void gptp_handle_msg(struct net_pkt *pkt)
 		GPTP_STATS_INC(port, rx_ptp_packet_discard_count);
 		break;
 	}
+
+	gptp_print_stats(port);
 }
 
 enum net_verdict net_gptp_recv(struct net_if *iface, struct net_pkt *pkt)
@@ -487,6 +502,10 @@ static void gptp_init_port_ds(int port)
 #if defined(CONFIG_NET_GPTP_STATISTICS)
 	/* Initialize stats data set. */
 	memset(port_param_ds, 0, sizeof(struct gptp_port_param_ds));
+
+	reset_stats(&port_param_ds->stats_offset);
+	reset_stats(&port_param_ds->stats_freq);
+	reset_stats(&port_param_ds->stats_delay);
 #endif
 }
 
@@ -868,6 +887,105 @@ int gptp_get_port_data(struct gptp_domain *domain,
 
 	return 0;
 }
+
+#if defined(CONFIG_NET_GPTP_STATISTICS)
+struct gptp_stats_result {
+	double min;
+	double max;
+	double max_abs;
+	double mean;
+	double rms;
+	double stddev;
+};
+
+static void reset_stats(struct gptp_stats *stats)
+{
+	stats->min = stats->max = stats->mean = stats->sum_sqr =
+		stats->sum_diff_sqr = 0.0;
+	stats->num_values = 0;
+}
+
+static int get_stats(struct gptp_stats *stats,
+		     struct gptp_stats_result *result)
+{
+	if (stats->num_values == 0) {
+		return -ENOENT;
+	}
+
+	result->min = stats->min;
+	result->max = stats->max;
+	result->max_abs = (stats->max > -stats->min) ?
+		stats->max : -stats->min;
+	result->mean = stats->mean;
+	result->rms = sqrt(stats->sum_sqr / stats->num_values);
+	result->stddev = sqrt(stats->sum_diff_sqr / stats->num_values);
+
+	return 0;
+}
+
+static u64_t stats_printing_interval;
+
+static void gptp_print_stats(int port)
+{
+	struct gptp_port_param_ds *port_param_ds = GPTP_PORT_PARAM_DS(port);
+	struct gptp_stats_result delay_stats;
+	struct gptp_stats_result freq_stats;
+	struct gptp_stats_result offset_stats;
+	static s64_t next_print;
+	s64_t curr_time;
+
+	if (stats_printing_interval <= 0) {
+		return;
+	}
+
+	curr_time = k_uptime_get();
+
+	if (!next_print || (next_print < curr_time &&
+			    (!((curr_time - next_print) >
+			       stats_printing_interval)))) {
+		s64_t new_print;
+
+		get_stats(&port_param_ds->stats_offset, &offset_stats);
+		get_stats(&port_param_ds->stats_freq, &freq_stats);
+
+		if (!get_stats(&port_param_ds->stats_delay, &delay_stats)) {
+			printf("gptp[%d] rms %4.0f max %4.0f "
+			       "freq %+6.0f +/- %3.0f "
+			       "delay %5.0f +/- %3.0f\n", port,
+			       offset_stats.rms, offset_stats.max_abs,
+			       freq_stats.mean, freq_stats.stddev,
+			       delay_stats.mean, delay_stats.stddev);
+		} else {
+			printf("gptp[%d] rms %4.0f max %4.0f "
+			       "freq %+6.0f +/- %3.0f\n", port,
+			       offset_stats.rms, offset_stats.max_abs,
+			       freq_stats.mean, freq_stats.stddev);
+		}
+
+		reset_stats(&port_param_ds->stats_offset);
+		reset_stats(&port_param_ds->stats_freq);
+		reset_stats(&port_param_ds->stats_delay);
+
+		new_print = curr_time + stats_printing_interval;
+		if (new_print > curr_time) {
+			next_print = new_print;
+		} else {
+			/* Overflow */
+			next_print = stats_printing_interval -
+				(LLONG_MAX - curr_time);
+		}
+	}
+}
+
+void gptp_monitor(int seconds)
+{
+	if (seconds > 0) {
+		stats_printing_interval = K_SECONDS(seconds);
+	} else {
+		stats_printing_interval = 0;
+	}
+}
+#endif
 
 void net_gptp_init(void)
 {
