@@ -210,9 +210,9 @@ struct net_pkt *gptp_prepare_sync(int port)
 		eth->type = htons(NET_ETH_PTYPE_PTP);
 	}
 
-	memcpy(&eth->src.addr, net_if_get_link_addr(iface)->addr,
+	memcpy(eth->src.addr, net_if_get_link_addr(iface)->addr,
 	       sizeof(struct net_eth_addr));
-	memcpy(&eth->dst.addr, &gptp_multicast_eth_addr,
+	memcpy(eth->dst.addr, &gptp_multicast_eth_addr,
 	       sizeof(struct net_eth_addr));
 
 	/* PTP configuration. */
@@ -326,9 +326,9 @@ struct net_pkt *gptp_prepare_follow_up(int port, struct net_pkt *sync)
 		eth->type = htons(NET_ETH_PTYPE_PTP);
 	}
 
-	memcpy(&eth->src.addr, net_if_get_link_addr(iface)->addr,
+	memcpy(eth->src.addr, net_if_get_link_addr(iface)->addr,
 	       sizeof(struct net_eth_addr));
-	memcpy(&eth->dst.addr, &gptp_multicast_eth_addr,
+	memcpy(eth->dst.addr, &gptp_multicast_eth_addr,
 	       sizeof(struct net_eth_addr));
 
 	/* PTP configuration will be set by the MDSyncSend state machine. */
@@ -424,8 +424,8 @@ struct net_pkt *gptp_prepare_pdelay_req(int port)
 	hdr->reserved1 = 0;
 	hdr->reserved2 = 0;
 
-	memcpy(&hdr->port_id.clk_id,
-	       &port_ds->port_id.clk_id, GPTP_CLOCK_ID_LEN);
+	memcpy(hdr->port_id.clk_id,
+	       port_ds->port_id.clk_id, GPTP_CLOCK_ID_LEN);
 
 	/* Ethernet configuration. */
 #if defined(CONFIG_NET_VLAN)
@@ -439,9 +439,9 @@ struct net_pkt *gptp_prepare_pdelay_req(int port)
 		eth->type = htons(NET_ETH_PTYPE_PTP);
 	}
 
-	memcpy(&eth->src.addr, net_if_get_link_addr(iface)->addr,
+	memcpy(eth->src.addr, net_if_get_link_addr(iface)->addr,
 	       sizeof(struct net_eth_addr));
-	memcpy(&eth->dst.addr, &gptp_multicast_eth_addr,
+	memcpy(eth->dst.addr, &gptp_multicast_eth_addr,
 	       sizeof(struct net_eth_addr));
 
 	/* PTP configuration. */
@@ -543,7 +543,7 @@ struct net_pkt *gptp_prepare_pdelay_resp(int port,
 	hdr->reserved1 = 0;
 	hdr->reserved2 = 0;
 
-	memcpy(&hdr->port_id.clk_id, &port_ds->port_id.clk_id,
+	memcpy(hdr->port_id.clk_id, port_ds->port_id.clk_id,
 	       GPTP_CLOCK_ID_LEN);
 
 	/* Ethernet configuration. */
@@ -558,9 +558,9 @@ struct net_pkt *gptp_prepare_pdelay_resp(int port,
 		eth->type = htons(NET_ETH_PTYPE_PTP);
 	}
 
-	memcpy(&eth->dst.addr, &gptp_multicast_eth_addr,
+	memcpy(eth->dst.addr, &gptp_multicast_eth_addr,
 	       sizeof(struct net_eth_addr));
-	memcpy(&eth->src.addr, net_if_get_link_addr(iface)->addr,
+	memcpy(eth->src.addr, net_if_get_link_addr(iface)->addr,
 	       sizeof(struct net_eth_addr));
 
 	/* PTP configuration. */
@@ -664,7 +664,7 @@ struct net_pkt *gptp_prepare_pdelay_follow_up(int port,
 	hdr->reserved1 = 0;
 	hdr->reserved2 = 0;
 
-	memcpy(&hdr->port_id.clk_id, &port_ds->port_id.clk_id,
+	memcpy(hdr->port_id.clk_id, port_ds->port_id.clk_id,
 	       GPTP_CLOCK_ID_LEN);
 
 	/* Ethernet configuration. */
@@ -679,9 +679,9 @@ struct net_pkt *gptp_prepare_pdelay_follow_up(int port,
 		eth->type = htons(NET_ETH_PTYPE_PTP);
 	}
 
-	memcpy(&eth->dst.addr, &gptp_multicast_eth_addr,
+	memcpy(eth->dst.addr, &gptp_multicast_eth_addr,
 	       sizeof(struct net_eth_addr));
-	memcpy(&eth->src.addr, net_if_get_link_addr(iface)->addr,
+	memcpy(eth->src.addr, net_if_get_link_addr(iface)->addr,
 	       sizeof(struct net_eth_addr));
 
 	/* PTP configuration. */
@@ -777,9 +777,9 @@ struct net_pkt *gptp_prepare_announce(int port)
 		eth->type = htons(NET_ETH_PTYPE_PTP);
 	}
 
-	memcpy(&eth->src.addr, net_if_get_link_addr(iface)->addr,
+	memcpy(eth->src.addr, net_if_get_link_addr(iface)->addr,
 	       sizeof(struct net_eth_addr));
-	memcpy(&eth->dst.addr, &gptp_multicast_eth_addr,
+	memcpy(eth->dst.addr, &gptp_multicast_eth_addr,
 	       sizeof(struct net_eth_addr));
 
 	hdr->message_type = GPTP_ANNOUNCE_MESSAGE;
