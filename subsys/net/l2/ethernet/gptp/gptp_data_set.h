@@ -644,9 +644,10 @@ static inline void gptp_stats_add_value(struct gptp_stats *stats, double value)
 }
 
 #else /* CONFIG_NET_GPTP_STATISTICS */
-static inline gptp_monitor(int seconds)
+static inline int gptp_monitor(int seconds)
 {
 	ARG_UNUSED(seconds);
+	return 0;
 }
 #endif /* CONFIG_NET_GPTP_STATISTICS */
 
