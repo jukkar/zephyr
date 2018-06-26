@@ -417,7 +417,9 @@ static void test_ptp_clock_iface(int idx)
 	ptp_clock_get(clk, &tm);
 
 	new_value = timestamp_to_nsec(&tm);
-	zassert_equal(orig + rnd_value, new_value, "Time adjust failure\n");
+	zassert_equal(orig + rnd_value, new_value,
+		      "Time adjust failure (%ldd vs %ldd)\n",
+		      orig + rnd_value, new_value);
 }
 
 static void test_ptp_clock_iface_1(void)
