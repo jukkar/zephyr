@@ -1622,6 +1622,11 @@ struct net_if_timestamp_cb {
 	/** Node information for the slist. */
 	sys_snode_t node;
 
+	/** Packet for which the callback is to be handled.
+	 *  A NULL valies meas all packets.
+	 */
+	struct net_pkt *pkt;
+
 	/** Net interface for which the callback is needed.
 	 *  A NULL value means all interfaces.
 	 */
@@ -1635,11 +1640,14 @@ struct net_if_timestamp_cb {
  * @brief Register a timestamp callback.
  *
  * @param handle Caller specified handler for the callback.
+ * @param pkt Net packet for which the callback is registered. NULL for all
+ * 	      packets.
  * @param iface Net interface for which the callback is. NULL for all
  *		interfaces.
  * @param cb Callback to register.
  */
 void net_if_register_timestamp_cb(struct net_if_timestamp_cb *handle,
+				  struct net_pkt *pkt,
 				  struct net_if *iface,
 				  net_if_timestamp_callback_t cb);
 
@@ -1663,6 +1671,25 @@ void net_if_call_timestamp_cb(struct net_pkt *pkt);
  * @param pkt Timestamped buffer
  */
 void net_if_add_tx_timestamp(struct net_pkt *pkt);
+
+#if defined(CONFIG_NET_STATISTICS)
+/*
+ * @brief Update Rx packet handling statistics
+ *
+ * @param pkt Received network packet
+ */
+void net_if_update_rx_timestamp_stats(struct net_pkt *pkt);
+
+/*
+ * @brief Update Tx packet handling statistics
+ *
+ * @param pkt Sent network packet
+ */
+void net_if_update_tx_timestamp_stats(struct net_pkt *pkt);
+#else
+#define net_if_update_rx_timestamp_stats(pkt)
+#define net_if_update_tx_timestamp_stats(pkt)
+#endif /* CONFIG_NET_STATISTICS */
 #endif /* CONFIG_NET_PKT_TIMESTAMP */
 
 struct net_if_api {

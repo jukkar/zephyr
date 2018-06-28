@@ -20,8 +20,8 @@
 
 static struct net_if_timestamp_cb sync_timestamp_cb;
 static struct net_if_timestamp_cb pdelay_response_timestamp_cb;
-static bool ts_cb_registered;
 static bool sync_cb_registered;
+static bool ts_cb_registered;
 
 static const struct net_eth_addr gptp_multicast_eth_addr = {
 	{ 0x01, 0x80, 0xc2, 0x00, 0x00, 0x0e } };
@@ -129,9 +129,24 @@ struct net_pkt *gptp_prepare_sync(int port)
 	struct net_buf *frag;
 	struct gptp_hdr *hdr;
 
+#if defined(CONFIG_NET_VLAN)
+	struct net_eth_vlan_hdr *hdr_vlan;
+	struct ethernet_context *eth_ctx;
+	bool vlan_enabled = false;
+#endif
+
 	NET_ASSERT((port >= GPTP_PORT_START) && (port <= GPTP_PORT_END));
 	iface = GPTP_PORT_IFACE(port);
 	NET_ASSERT(iface);
+
+#if defined(CONFIG_NET_VLAN)
+	eth_ctx = net_if_l2_data(iface);
+	if (eth_ctx->vlan_enabled &&
+	    net_eth_get_vlan_tag(iface) != NET_VLAN_TAG_UNSPEC) {
+		eth_len = sizeof(struct net_eth_vlan_hdr);
+		vlan_enabled = true;
+	}
+#endif
 
 	pkt = net_pkt_get_reserve_tx(0, NET_BUF_TIMEOUT);
 	if (!pkt) {
@@ -146,8 +161,15 @@ struct net_pkt *gptp_prepare_sync(int port)
 	net_pkt_frag_add(pkt, frag);
 	net_pkt_set_iface(pkt, iface);
 	net_pkt_set_family(pkt, AF_UNSPEC);
+	net_pkt_set_priority(pkt, NET_PRIORITY_CA);
 
 	net_pkt_set_ll_reserve(pkt, eth_len);
+
+#if defined(CONFIG_NET_VLAN)
+	if (vlan_enabled) {
+		hdr_vlan = (struct net_eth_vlan_hdr *)NET_ETH_HDR(pkt);
+	}
+#endif
 
 	port_ds = GPTP_PORT_DS(port);
 	sync = GPTP_SYNC(pkt);
@@ -177,11 +199,20 @@ struct net_pkt *gptp_prepare_sync(int port)
 	hdr->reserved2 = 0;
 
 	/* Ethernet configuration. */
-	eth->type = htons(NET_ETH_PTYPE_PTP);
+#if defined(CONFIG_NET_VLAN)
+	if (vlan_enabled) {
+		hdr_vlan->vlan.tpid = htons(NET_ETH_PTYPE_VLAN);
+		hdr_vlan->vlan.tci = htons(net_eth_get_vlan_tag(iface));
+		hdr_vlan->type = htons(NET_ETH_PTYPE_PTP);
+	} else
+#endif
+	{
+		eth->type = htons(NET_ETH_PTYPE_PTP);
+	}
 
-	memcpy(&eth->src.addr, net_if_get_link_addr(iface)->addr,
+	memcpy(eth->src.addr, net_if_get_link_addr(iface)->addr,
 	       sizeof(struct net_eth_addr));
-	memcpy(&eth->dst.addr, &gptp_multicast_eth_addr,
+	memcpy(eth->dst.addr, &gptp_multicast_eth_addr,
 	       sizeof(struct net_eth_addr));
 
 	/* PTP configuration. */
@@ -212,10 +243,25 @@ struct net_pkt *gptp_prepare_follow_up(int port, struct net_pkt *sync)
 	struct net_pkt *pkt;
 	struct net_buf *frag;
 
+#if defined(CONFIG_NET_VLAN)
+	struct net_eth_vlan_hdr *hdr_vlan;
+	struct ethernet_context *eth_ctx;
+	bool vlan_enabled = false;
+#endif
+
 	NET_ASSERT(sync);
 	NET_ASSERT((port >= GPTP_PORT_START) && (port <= GPTP_PORT_END));
 	iface = GPTP_PORT_IFACE(port);
 	NET_ASSERT(iface);
+
+#if defined(CONFIG_NET_VLAN)
+	eth_ctx = net_if_l2_data(iface);
+	if (eth_ctx->vlan_enabled &&
+	    net_eth_get_vlan_tag(iface) != NET_VLAN_TAG_UNSPEC) {
+		eth_len = sizeof(struct net_eth_vlan_hdr);
+		vlan_enabled = true;
+	}
+#endif
 
 	pkt = net_pkt_get_reserve_tx(0, NET_BUF_TIMEOUT);
 	if (!pkt) {
@@ -231,6 +277,14 @@ struct net_pkt *gptp_prepare_follow_up(int port, struct net_pkt *sync)
 	net_pkt_set_iface(pkt, iface);
 	net_pkt_set_family(pkt, AF_UNSPEC);
 	net_pkt_set_ll_reserve(pkt, eth_len);
+	net_pkt_set_priority(pkt, NET_PRIORITY_IC);
+
+#if defined(CONFIG_NET_VLAN)
+	if (vlan_enabled) {
+		hdr_vlan = (struct net_eth_vlan_hdr *)NET_ETH_HDR(pkt);
+		net_pkt_set_vlan_tag(pkt, net_pkt_vlan_tag(sync));
+	}
+#endif
 
 	port_ds = GPTP_PORT_DS(port);
 	hdr = GPTP_HDR(pkt);
@@ -261,11 +315,20 @@ struct net_pkt *gptp_prepare_follow_up(int port, struct net_pkt *sync)
 	hdr->reserved2 = 0;
 
 	/* Ethernet configuration. */
-	eth->type = htons(NET_ETH_PTYPE_PTP);
+#if defined(CONFIG_NET_VLAN)
+	if (vlan_enabled) {
+		hdr_vlan->vlan.tpid = htons(NET_ETH_PTYPE_VLAN);
+		hdr_vlan->vlan.tci = htons(net_pkt_vlan_tag(pkt));
+		hdr_vlan->type = htons(NET_ETH_PTYPE_PTP);
+	} else
+#endif
+	{
+		eth->type = htons(NET_ETH_PTYPE_PTP);
+	}
 
-	memcpy(&eth->src.addr, net_if_get_link_addr(iface)->addr,
+	memcpy(eth->src.addr, net_if_get_link_addr(iface)->addr,
 	       sizeof(struct net_eth_addr));
-	memcpy(&eth->dst.addr, &gptp_multicast_eth_addr,
+	memcpy(eth->dst.addr, &gptp_multicast_eth_addr,
 	       sizeof(struct net_eth_addr));
 
 	/* PTP configuration will be set by the MDSyncSend state machine. */
@@ -294,9 +357,24 @@ struct net_pkt *gptp_prepare_pdelay_req(int port)
 	struct net_buf *frag;
 	struct gptp_hdr *hdr;
 
+#if defined(CONFIG_NET_VLAN)
+	struct net_eth_vlan_hdr *hdr_vlan;
+	struct ethernet_context *eth_ctx;
+	bool vlan_enabled = false;
+#endif
+
 	NET_ASSERT((port >= GPTP_PORT_START) && (port <= GPTP_PORT_END));
 	iface = GPTP_PORT_IFACE(port);
 	NET_ASSERT(iface);
+
+#if defined(CONFIG_NET_VLAN)
+	eth_ctx = net_if_l2_data(iface);
+	if (eth_ctx->vlan_enabled &&
+	    net_eth_get_vlan_tag(iface) != NET_VLAN_TAG_UNSPEC) {
+		eth_len = sizeof(struct net_eth_vlan_hdr);
+		vlan_enabled = true;
+	}
+#endif
 
 	pkt = net_pkt_get_reserve_tx(0, NET_BUF_TIMEOUT);
 	if (!pkt) {
@@ -312,6 +390,13 @@ struct net_pkt *gptp_prepare_pdelay_req(int port)
 	net_pkt_set_iface(pkt, iface);
 	net_pkt_set_family(pkt, AF_UNSPEC);
 	net_pkt_set_ll_reserve(pkt, eth_len);
+	net_pkt_set_priority(pkt, NET_PRIORITY_CA);
+
+#if defined(CONFIG_NET_VLAN)
+	if (vlan_enabled) {
+		hdr_vlan = (struct net_eth_vlan_hdr *)NET_ETH_HDR(pkt);
+	}
+#endif
 
 	port_ds = GPTP_PORT_DS(port);
 	req = GPTP_PDELAY_REQ(pkt);
@@ -339,15 +424,24 @@ struct net_pkt *gptp_prepare_pdelay_req(int port)
 	hdr->reserved1 = 0;
 	hdr->reserved2 = 0;
 
-	memcpy(&hdr->port_id.clk_id,
-	       &port_ds->port_id.clk_id, GPTP_CLOCK_ID_LEN);
+	memcpy(hdr->port_id.clk_id,
+	       port_ds->port_id.clk_id, GPTP_CLOCK_ID_LEN);
 
 	/* Ethernet configuration. */
-	eth->type = htons(NET_ETH_PTYPE_PTP);
+#if defined(CONFIG_NET_VLAN)
+	if (vlan_enabled) {
+		hdr_vlan->vlan.tpid = htons(NET_ETH_PTYPE_VLAN);
+		hdr_vlan->vlan.tci = htons(net_eth_get_vlan_tag(iface));
+		hdr_vlan->type = htons(NET_ETH_PTYPE_PTP);
+	} else
+#endif
+	{
+		eth->type = htons(NET_ETH_PTYPE_PTP);
+	}
 
-	memcpy(&eth->src.addr, net_if_get_link_addr(iface)->addr,
+	memcpy(eth->src.addr, net_if_get_link_addr(iface)->addr,
 	       sizeof(struct net_eth_addr));
-	memcpy(&eth->dst.addr, &gptp_multicast_eth_addr,
+	memcpy(eth->dst.addr, &gptp_multicast_eth_addr,
 	       sizeof(struct net_eth_addr));
 
 	/* PTP configuration. */
@@ -383,6 +477,19 @@ struct net_pkt *gptp_prepare_pdelay_resp(int port,
 	struct net_pkt *pkt;
 	struct net_buf *frag;
 
+#if defined(CONFIG_NET_VLAN)
+	struct net_eth_vlan_hdr *hdr_vlan;
+	struct ethernet_context *eth_ctx;
+	bool vlan_enabled = false;
+
+	eth_ctx = net_if_l2_data(iface);
+	if (eth_ctx->vlan_enabled &&
+	    net_eth_get_vlan_tag(iface) != NET_VLAN_TAG_UNSPEC) {
+		eth_len = sizeof(struct net_eth_vlan_hdr);
+		vlan_enabled = true;
+	}
+#endif
+
 	pkt = net_pkt_get_reserve_tx(0, NET_BUF_TIMEOUT);
 	if (!pkt) {
 		goto fail;
@@ -397,6 +504,13 @@ struct net_pkt *gptp_prepare_pdelay_resp(int port,
 	net_pkt_set_iface(pkt, iface);
 	net_pkt_set_family(pkt, AF_INET);
 	net_pkt_set_ll_reserve(pkt, eth_len);
+	net_pkt_set_priority(pkt, NET_PRIORITY_CA);
+
+#if defined(CONFIG_NET_VLAN)
+	if (vlan_enabled) {
+		hdr_vlan = (struct net_eth_vlan_hdr *)NET_ETH_HDR(pkt);
+	}
+#endif
 
 	port_ds = GPTP_PORT_DS(port);
 
@@ -429,15 +543,24 @@ struct net_pkt *gptp_prepare_pdelay_resp(int port,
 	hdr->reserved1 = 0;
 	hdr->reserved2 = 0;
 
-	memcpy(&hdr->port_id.clk_id, &port_ds->port_id.clk_id,
+	memcpy(hdr->port_id.clk_id, port_ds->port_id.clk_id,
 	       GPTP_CLOCK_ID_LEN);
 
 	/* Ethernet configuration. */
-	eth->type = htons(NET_ETH_PTYPE_PTP);
+#if defined(CONFIG_NET_VLAN)
+	if (vlan_enabled) {
+		hdr_vlan->vlan.tpid = htons(NET_ETH_PTYPE_VLAN);
+		hdr_vlan->vlan.tci = htons(net_pkt_vlan_tag(pkt));
+		hdr_vlan->type = htons(NET_ETH_PTYPE_PTP);
+	} else
+#endif
+	{
+		eth->type = htons(NET_ETH_PTYPE_PTP);
+	}
 
-	memcpy(&eth->dst.addr, &gptp_multicast_eth_addr,
+	memcpy(eth->dst.addr, &gptp_multicast_eth_addr,
 	       sizeof(struct net_eth_addr));
-	memcpy(&eth->src.addr, net_if_get_link_addr(iface)->addr,
+	memcpy(eth->src.addr, net_if_get_link_addr(iface)->addr,
 	       sizeof(struct net_eth_addr));
 
 	/* PTP configuration. */
@@ -474,6 +597,19 @@ struct net_pkt *gptp_prepare_pdelay_follow_up(int port,
 	struct net_pkt *pkt;
 	struct net_buf *frag;
 
+#if defined(CONFIG_NET_VLAN)
+	struct net_eth_vlan_hdr *hdr_vlan;
+	struct ethernet_context *eth_ctx;
+	bool vlan_enabled = false;
+
+	eth_ctx = net_if_l2_data(iface);
+	if (eth_ctx->vlan_enabled &&
+	    net_eth_get_vlan_tag(iface) != NET_VLAN_TAG_UNSPEC) {
+		eth_len = sizeof(struct net_eth_vlan_hdr);
+		vlan_enabled = true;
+	}
+#endif
+
 	pkt = net_pkt_get_reserve_tx(0, NET_BUF_TIMEOUT);
 	if (!pkt) {
 		goto fail;
@@ -488,6 +624,14 @@ struct net_pkt *gptp_prepare_pdelay_follow_up(int port,
 	net_pkt_set_iface(pkt, iface);
 	net_pkt_set_family(pkt, AF_INET);
 	net_pkt_set_ll_reserve(pkt, eth_len);
+	net_pkt_set_priority(pkt, NET_PRIORITY_IC);
+
+#if defined(CONFIG_NET_VLAN)
+	if (vlan_enabled) {
+		hdr_vlan = (struct net_eth_vlan_hdr *)NET_ETH_HDR(pkt);
+		net_pkt_set_vlan_tag(pkt, net_pkt_vlan_tag(resp));
+	}
+#endif
 
 	port_ds = GPTP_PORT_DS(port);
 
@@ -520,15 +664,24 @@ struct net_pkt *gptp_prepare_pdelay_follow_up(int port,
 	hdr->reserved1 = 0;
 	hdr->reserved2 = 0;
 
-	memcpy(&hdr->port_id.clk_id, &port_ds->port_id.clk_id,
+	memcpy(hdr->port_id.clk_id, port_ds->port_id.clk_id,
 	       GPTP_CLOCK_ID_LEN);
 
 	/* Ethernet configuration. */
-	eth->type = htons(NET_ETH_PTYPE_PTP);
+#if defined(CONFIG_NET_VLAN)
+	if (vlan_enabled) {
+		hdr_vlan->vlan.tpid = htons(NET_ETH_PTYPE_VLAN);
+		hdr_vlan->vlan.tci = htons(net_pkt_vlan_tag(pkt));
+		hdr_vlan->type = htons(NET_ETH_PTYPE_PTP);
+	} else
+#endif
+	{
+		eth->type = htons(NET_ETH_PTYPE_PTP);
+	}
 
-	memcpy(&eth->dst.addr, &gptp_multicast_eth_addr,
+	memcpy(eth->dst.addr, &gptp_multicast_eth_addr,
 	       sizeof(struct net_eth_addr));
-	memcpy(&eth->src.addr, net_if_get_link_addr(iface)->addr,
+	memcpy(eth->src.addr, net_if_get_link_addr(iface)->addr,
 	       sizeof(struct net_eth_addr));
 
 	/* PTP configuration. */
@@ -557,6 +710,7 @@ struct net_pkt *gptp_prepare_announce(int port)
 {
 	int eth_len = sizeof(struct net_eth_hdr);
 	struct gptp_global_ds *global_ds;
+	struct gptp_default_ds *default_ds;
 	struct gptp_port_ds *port_ds;
 	struct gptp_announce *ann;
 	struct net_eth_hdr *eth;
@@ -565,10 +719,26 @@ struct net_pkt *gptp_prepare_announce(int port)
 	struct net_buf *frag;
 	struct gptp_hdr *hdr;
 
+#if defined(CONFIG_NET_VLAN)
+	struct net_eth_vlan_hdr *hdr_vlan;
+	struct ethernet_context *eth_ctx;
+	bool vlan_enabled = false;
+#endif
+
 	NET_ASSERT((port >= GPTP_PORT_START) && (port <= GPTP_PORT_END));
 	global_ds = GPTP_GLOBAL_DS();
+	default_ds = GPTP_DEFAULT_DS();
 	iface = GPTP_PORT_IFACE(port);
 	NET_ASSERT(iface);
+
+#if defined(CONFIG_NET_VLAN)
+	eth_ctx = net_if_l2_data(iface);
+	if (eth_ctx->vlan_enabled &&
+	    net_eth_get_vlan_tag(iface) != NET_VLAN_TAG_UNSPEC) {
+		eth_len = sizeof(struct net_eth_vlan_hdr);
+		vlan_enabled = true;
+	}
+#endif
 
 	pkt = net_pkt_get_reserve_tx(0, NET_BUF_TIMEOUT);
 	if (!pkt) {
@@ -584,6 +754,13 @@ struct net_pkt *gptp_prepare_announce(int port)
 	net_pkt_set_iface(pkt, iface);
 	net_pkt_set_family(pkt, AF_INET);
 	net_pkt_set_ll_reserve(pkt, eth_len);
+	net_pkt_set_priority(pkt, NET_PRIORITY_IC);
+
+#if defined(CONFIG_NET_VLAN)
+	if (vlan_enabled) {
+		hdr_vlan = (struct net_eth_vlan_hdr *)NET_ETH_HDR(pkt);
+	}
+#endif
 
 	eth = NET_ETH_HDR(pkt);
 	hdr = GPTP_HDR(pkt);
@@ -591,11 +768,20 @@ struct net_pkt *gptp_prepare_announce(int port)
 	port_ds = GPTP_PORT_DS(port);
 
 	/* Ethernet configuration. */
-	eth->type = htons(NET_ETH_PTYPE_PTP);
+#if defined(CONFIG_NET_VLAN)
+	if (vlan_enabled) {
+		hdr_vlan->vlan.tpid = htons(NET_ETH_PTYPE_VLAN);
+		hdr_vlan->vlan.tci = htons(net_eth_get_vlan_tag(iface));
+		hdr_vlan->type = htons(NET_ETH_PTYPE_PTP);
+	} else
+#endif
+	{
+		eth->type = htons(NET_ETH_PTYPE_PTP);
+	}
 
-	memcpy(&eth->src.addr, net_if_get_link_addr(iface)->addr,
+	memcpy(eth->src.addr, net_if_get_link_addr(iface)->addr,
 	       sizeof(struct net_eth_addr));
-	memcpy(&eth->dst.addr, &gptp_multicast_eth_addr,
+	memcpy(eth->dst.addr, &gptp_multicast_eth_addr,
 	       sizeof(struct net_eth_addr));
 
 	hdr->message_type = GPTP_ANNOUNCE_MESSAGE;
@@ -627,9 +813,28 @@ struct net_pkt *gptp_prepare_announce(int port)
 	ann->cur_utc_offset = global_ds->current_utc_offset;
 	ann->time_source = global_ds->time_source;
 
-	memcpy(&ann->root_system_id,
-	       &GPTP_PORT_BMCA_DATA(port)->master_priority.root_system_id,
-	       sizeof(struct gptp_root_system_identity));
+	switch (GPTP_PORT_BMCA_DATA(port)->info_is) {
+	case GPTP_INFO_IS_MINE:
+		ann->root_system_id.grand_master_prio1 = default_ds->priority1;
+		ann->root_system_id.grand_master_prio2 = default_ds->priority2;
+
+		memcpy(&ann->root_system_id.clk_quality,
+		       &default_ds->clk_quality,
+		       sizeof(struct gptp_clock_quality));
+
+		memcpy(&ann->root_system_id.grand_master_id,
+		       default_ds->clk_id,
+		       GPTP_CLOCK_ID_LEN);
+		break;
+	case GPTP_INFO_IS_RECEIVED:
+		memcpy(&ann->root_system_id,
+		       &GPTP_PORT_BMCA_DATA(port)->master_priority.root_system_id,
+		       sizeof(struct gptp_root_system_identity));
+		break;
+	default:
+		goto fail;
+	}
+
 	ann->steps_removed = global_ds->master_steps_removed;
 	hdr->sequence_id = htons(port_ds->announce_seq_id);
 	port_ds->announce_seq_id++;
@@ -717,27 +922,35 @@ void gptp_handle_pdelay_req(int port, struct net_pkt *pkt)
 
 	GPTP_STATS_INC(port, rx_pdelay_req_count);
 
+	if (ts_cb_registered == true) {
+		NET_WARN("Multiple pdelay requests");
+
+		net_if_unregister_timestamp_cb(&pdelay_response_timestamp_cb);
+		net_pkt_unref(pdelay_response_timestamp_cb.pkt);
+
+		ts_cb_registered = false;
+	}
+
 	/* Prepare response and send */
 	reply = gptp_prepare_pdelay_resp(port, pkt);
-	if (reply) {
-		if (!ts_cb_registered) {
-			net_if_register_timestamp_cb(
-				&pdelay_response_timestamp_cb,
-				net_pkt_iface(pkt),
-				gptp_pdelay_response_timestamp_callback);
-
-			ts_cb_registered = true;
-		}
-
-		/* TS thread will send this back to us so increment ref count
-		 * so that the packet is not removed when sending it.
-		 * This will be unref'ed by timestamp callback in
-		 * gptp_pdelay_response_timestamp_callback()
-		 */
-		net_pkt_ref(reply);
-
-		gptp_send_pdelay_resp(port, reply, net_pkt_timestamp(pkt));
+	if (!reply) {
+		return;
 	}
+
+	net_if_register_timestamp_cb(&pdelay_response_timestamp_cb,
+				     reply,
+				     net_pkt_iface(pkt),
+				     gptp_pdelay_response_timestamp_callback);
+
+	/* TS thread will send this back to us so increment ref count so that
+	 * the packet is not removed when sending it. This will be unref'ed by
+	 * timestamp callback in gptp_pdelay_response_timestamp_callback()
+	 */
+	net_pkt_ref(reply);
+
+	ts_cb_registered = true;
+
+	gptp_send_pdelay_resp(port, reply, net_pkt_timestamp(pkt));
 }
 
 int gptp_handle_pdelay_resp(int port, struct net_pkt *pkt)
@@ -894,8 +1107,9 @@ void gptp_handle_signaling(int port, struct net_pkt *pkt)
 
 void gptp_send_sync(int port, struct net_pkt *pkt)
 {
-	if (sync_cb_registered) {
+	if (!sync_cb_registered) {
 		net_if_register_timestamp_cb(&sync_timestamp_cb,
+					     pkt,
 					     net_pkt_iface(pkt),
 					     gptp_sync_timestamp_callback);
 		sync_cb_registered = true;
@@ -945,6 +1159,13 @@ void gptp_send_pdelay_req(int port)
 
 	pkt = gptp_prepare_pdelay_req(port);
 	if (pkt) {
+		if (state->tx_pdelay_req_ptr) {
+			NET_DBG("Unref pending %s %p", "PDELAY_REQ",
+				state->tx_pdelay_req_ptr);
+
+			net_pkt_unref(state->tx_pdelay_req_ptr);
+		}
+
 		/* Keep the buffer alive until pdelay_rate_ratio is computed. */
 		state->tx_pdelay_req_ptr = net_pkt_ref(pkt);
 

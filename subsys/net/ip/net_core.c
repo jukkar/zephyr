@@ -336,6 +336,8 @@ static void net_queue_rx(struct net_if *iface, struct net_pkt *pkt)
 	NET_DBG("TC %d with prio %d pkt %p", tc, prio, pkt);
 #endif
 
+	net_pkt_set_traffic_class(pkt, tc);
+
 	net_tc_submit_to_rx_queue(tc, pkt);
 }
 

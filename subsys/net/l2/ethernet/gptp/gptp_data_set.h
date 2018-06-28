@@ -459,6 +459,23 @@ struct gptp_port_ds {
 
 	/** Whether neighborPropDelay needs to be computed for this port. */
 	bool compute_neighbor_prop_delay : 1;
+
+	/** Whether neighbor rate ratio can be used to update clocks. */
+	bool neighbor_rate_ratio_valid : 1;
+};
+
+/**
+ * @brief Port performance statistics
+ *
+ * Data Set containing performance statistics.
+ */
+struct gptp_stats {
+	u32_t num_values;
+	double min;
+	double max;
+	double mean;
+	double sum_sqr;
+	double sum_diff_sqr;
 };
 
 /**
@@ -467,6 +484,15 @@ struct gptp_port_ds {
  * Data Set containing statistics associated with various events.
  */
 struct gptp_port_param_ds {
+	/** Clock offset statistics */
+	struct gptp_stats stats_offset;
+
+	/** Clock frequency statistics */
+	struct gptp_stats stats_freq;
+
+	/** Sync delay statistics */
+	struct gptp_stats stats_delay;
+
 	/** Number of Sync messages received. */
 	u32_t rx_sync_count;
 
@@ -582,6 +608,48 @@ int gptp_get_port_data(struct gptp_domain *domain, int port,
 		       struct gptp_port_states **port_state,
 		       struct gptp_port_bmca_data **port_bmca_data,
 		       struct net_if **iface);
+
+#if defined(CONFIG_NET_GPTP_STATISTICS)
+/**
+ * @brief Enable or disable gPTP performance monitoring.
+ *
+ * @param seconds How often to print monitoring information.
+ */
+void gptp_monitor(int seconds);
+
+/**
+ * @brief Update statistics
+ *
+ * @param stats What statistics are we are working on here (offset, freq,
+ *              delay).
+ * @param value Value of the statistics variable.
+ */
+static inline void gptp_stats_add_value(struct gptp_stats *stats, double value)
+{
+	double old_mean = stats->mean;
+
+	if (!stats->num_values || stats->max < value) {
+		stats->max = value;
+	}
+
+	if (!stats->num_values || stats->min > value) {
+		stats->min = value;
+	}
+
+	stats->num_values++;
+
+	stats->mean = old_mean + (value - old_mean) / stats->num_values;
+	stats->sum_sqr += value * value;
+	stats->sum_diff_sqr += (value - old_mean) * (value - stats->mean);
+}
+
+#else /* CONFIG_NET_GPTP_STATISTICS */
+static inline int gptp_monitor(int seconds)
+{
+	ARG_UNUSED(seconds);
+	return 0;
+}
+#endif /* CONFIG_NET_GPTP_STATISTICS */
 
 #endif /* CONFIG_NET_GPTP */
 
