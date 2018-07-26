@@ -19,6 +19,7 @@
 
 #include <net/net_ip.h>
 #include <net/net_pkt.h>
+#include <net/lldp.h>
 #include <misc/util.h>
 #include <net/net_if.h>
 #include <net/ethernet_vlan.h>
@@ -45,6 +46,7 @@ struct net_eth_addr {
 #define NET_ETH_PTYPE_IPV6		0x86dd
 #define NET_ETH_PTYPE_VLAN		0x8100
 #define NET_ETH_PTYPE_PTP		0x88f7
+#define NET_ETH_PTYPE_LLDP		0x88cc
 
 #define NET_ETH_MINIMAL_FRAME_SIZE	60
 
@@ -208,6 +210,11 @@ struct ethernet_context {
 		 */
 		struct net_if *iface;
 	} carrier_mgmt;
+
+#if defined(CONFIG_NET_LLDP)
+	/** LLDP information element related to this network interface */
+	const struct net_lldpdu *lldpdu;
+#endif
 
 #if defined(CONFIG_NET_GPTP)
 	/** The gPTP port number for this network device. We need to store the
