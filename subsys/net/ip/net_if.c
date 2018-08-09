@@ -431,6 +431,8 @@ static inline void init_iface(struct net_if *iface)
 	k_mutex_init(&iface->tx_lock);
 
 	api->init(iface);
+
+	net_ipv6_pe_init(iface);
 }
 
 enum net_verdict net_if_send_data(struct net_if *iface, struct net_pkt *pkt)
@@ -1232,8 +1234,8 @@ static void dad_timeout(struct k_work *work)
 	}
 }
 
-static void net_if_ipv6_start_dad(struct net_if *iface,
-				  struct net_if_addr *ifaddr)
+void net_if_ipv6_start_dad(struct net_if *iface,
+			   struct net_if_addr *ifaddr)
 {
 	ifaddr->addr_state = NET_ADDR_TENTATIVE;
 
@@ -1324,6 +1326,7 @@ out:
 void net_if_ipv6_dad_failed(struct net_if *iface, const struct in6_addr *addr)
 {
 	struct net_if_addr *ifaddr;
+	uint32_t timeout, preferred_lifetime;
 
 	net_if_lock(iface);
 
@@ -1335,11 +1338,32 @@ void net_if_ipv6_dad_failed(struct net_if *iface, const struct in6_addr *addr)
 	}
 
 
+	if (IS_ENABLED(CONFIG_NET_IPV6_PE_ENABLE)) {
+		ifaddr->dad_count++;
+
+		timeout = ifaddr->addr_timeout;
+		preferred_lifetime = ifaddr->addr_preferred_lifetime;
+
+		if (!net_ipv6_pe_check_dad(ifaddr->dad_count)) {
+			NET_ERR("Cannot generate PE address for interface %p",
+				iface);
+			iface->pe_enabled = false;
+		}
+	}
+
 	net_mgmt_event_notify_with_info(NET_EVENT_IPV6_DAD_FAILED, iface,
 					&ifaddr->address.in6_addr,
 					sizeof(struct in6_addr));
 
+	/* The old address needs to be removed from the interface before we can
+	 * start new DAD for the new PE address as the amount of address slots
+	 * is limited.
+	 */
 	net_if_ipv6_addr_rm(iface, addr);
+
+	if (IS_ENABLED(CONFIG_NET_IPV6_PE_ENABLE) && iface->pe_enabled) {
+		net_ipv6_pe_start(iface, addr, timeout, preferred_lifetime);
+	}
 
 out:
 	net_if_unlock(iface);
@@ -1776,8 +1800,10 @@ static inline void net_if_addr_init(struct net_if_addr *ifaddr,
 				    uint32_t vlifetime)
 {
 	ifaddr->is_used = true;
+	ifaddr->is_temporary = false;
 	ifaddr->address.family = AF_INET6;
 	ifaddr->addr_type = addr_type;
+
 	net_ipaddr_copy(&ifaddr->address.in6_addr, addr);
 
 	/* FIXME - set the mcast addr for this node */

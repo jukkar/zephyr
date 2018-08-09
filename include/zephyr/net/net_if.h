@@ -68,12 +68,31 @@ struct net_if_addr {
 	/** What is the current state of the address */
 	enum net_addr_state addr_state;
 
-#if defined(CONFIG_NET_IPV6_DAD) && defined(CONFIG_NET_NATIVE_IPV6)
+#if defined(CONFIG_NET_NATIVE_IPV6)
+#if defined(CONFIG_NET_IPV6_PE_ENABLE)
+	/** Address creation time. This is used to determine if the maximum
+	 * lifetime for this address is reached or not. The value is in seconds.
+	 */
+	uint32_t addr_create_time;
+
+	/** Preferred lifetime for the address in seconds.
+	 */
+	uint32_t addr_preferred_lifetime;
+
+	/** Address timeout value. This is only used if DAD needs to be redone
+	 * for this address because of earlier DAD failure. This value is in
+	 * seconds.
+	 */
+	int32_t addr_timeout;
+#endif
+
+#if defined(CONFIG_NET_IPV6_DAD)
 	/** How many times we have done DAD */
 	uint8_t dad_count;
 	/* What interface the DAD is running */
 	uint8_t ifindex;
 #endif
+#endif /* CONFIG_NET_NATIVE_IPV6 */
 
 	/** Is the IP address valid forever */
 	uint8_t is_infinite : 1;
@@ -84,7 +103,12 @@ struct net_if_addr {
 	/** Is this IP address usage limited to the subnet (mesh) or not */
 	uint8_t is_mesh_local : 1;
 
-	uint8_t _unused : 5;
+	/** Is this IP address temporary and generated for example by
+	 * IPv6 privacy extension (RFC 4941)
+	 */
+	uint8_t is_temporary : 1;
+
+	uint8_t _unused : 4;
 };
 
 /**
@@ -653,6 +677,19 @@ struct net_if {
 
 	struct k_mutex lock;
 	struct k_mutex tx_lock;
+
+	/** Network interface specific flags */
+	/** Enable IPv6 privacy extension (RFC 4941), this is enabled
+	 * by default if PE support is enabled in configuration.
+	 */
+	uint8_t pe_enabled : 1;
+
+	/* If PE is enabled, then this tells whether public addresses
+	 * are preferred over temporary ones for this interface.
+	 */
+	uint8_t pe_prefer_public : 1;
+
+	uint8_t _unused : 6;
 };
 
 static inline void net_if_lock(struct net_if *iface)
