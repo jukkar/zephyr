@@ -98,9 +98,9 @@ static const unsigned char icmpv6_ra[] = {
 	0x01, 0x01, 0x00, 0x60, 0x97, 0x07, 0x69, 0xea,
 /* MTU */
 	0x05, 0x01, 0x00, 0x00, 0x00, 0x00, 0x05, 0xdc,
-/* Prefix info */
-	0x03, 0x04, 0x40, 0xc0, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00,
+/* Prefix info*/
+	0x03, 0x04, 0x40, 0xc0, 0x00, 0x00, 0xFF, 0xFF,
+	0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00,
 	0x3f, 0xfe, 0x05, 0x07, 0x00, 0x00, 0x00, 0x01,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 /* Route info */
@@ -1536,6 +1536,207 @@ ZTEST(net_ipv6, test_dst_unknown_group_mcast_recv)
 		      "Packet sent to unknown multicast group was not dropped");
 
 	net_context_put(ctx);
+}
+
+#if defined(CONFIG_NET_IPV6_PE_ENABLE)
+static bool is_pe_address_found(struct net_if *iface, struct in6_addr *prefix)
+{
+	struct net_if_ipv6 *ipv6;
+	int i;
+
+	ipv6 = iface->config.ip.ipv6;
+
+	zassert_not_null(ipv6, "IPv6 configuration is wrong for iface %p",
+			 iface);
+
+	for (i = 0; i < NET_IF_MAX_IPV6_ADDR; i++) {
+		if (!ipv6->unicast[i].is_used ||
+		    ipv6->unicast[i].address.family != AF_INET6 ||
+		    !ipv6->unicast[i].is_temporary) {
+			continue;
+		}
+
+		if (net_ipv6_is_prefix(
+			    (uint8_t *)&ipv6->unicast[i].address.in6_addr,
+			    (uint8_t *)prefix, 64)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static void get_pe_addresses(struct net_if *iface,
+			     struct in6_addr **public_addr,
+			     struct in6_addr **temp_addr)
+{
+	struct in6_addr prefix = { { { 0x3f, 0xfe, 0x05, 0x07, 0, 0, 0, 1,
+				       0, 0, 0, 0, 0, 0, 0, 0 } } };
+	struct net_if_ipv6 *ipv6;
+	int i;
+
+	ipv6 = iface->config.ip.ipv6;
+
+	zassert_not_null(ipv6, "IPv6 configuration is wrong for iface %p",
+			 iface);
+
+	for (i = 0; i < NET_IF_MAX_IPV6_ADDR; i++) {
+		if (!ipv6->unicast[i].is_used ||
+		    ipv6->unicast[i].address.family != AF_INET6) {
+			continue;
+		}
+
+		if (net_ipv6_is_prefix(
+			    (uint8_t *)&ipv6->unicast[i].address.in6_addr,
+			    (uint8_t *)&prefix, 64)) {
+			if (ipv6->unicast[i].is_temporary) {
+				*temp_addr =
+					&ipv6->unicast[i].address.in6_addr;
+			} else {
+				*public_addr =
+					&ipv6->unicast[i].address.in6_addr;
+			}
+		}
+	}
+}
+#endif
+
+ZTEST(net_ipv6, test_privacy_extension)
+{
+#if defined(CONFIG_NET_IPV6_PE_ENABLE)
+	struct in6_addr prefix = { { { 0x3f, 0xfe, 0x05, 0x07, 0, 0, 0, 1,
+				       0, 0, 0, 0, 0, 0, 0, 0 } } };
+	struct net_if *iface = net_if_get_default();
+	bool found;
+
+	zassert_true(iface->pe_enabled,
+		     "Privacy extension not enabled for iface %p", iface);
+
+	if (IS_ENABLED(CONFIG_NET_IPV6_PE_PREFER_PUBLIC_ADDRESSES)) {
+		zassert_true(iface->pe_prefer_public,
+			     "Prefer public flag not set correctly for "
+			     "iface %p", iface);
+	}
+
+	/* We received RA message earlier, make sure that temporary address
+	 * is created because of that message.
+	 */
+
+	found = is_pe_address_found(iface, &prefix);
+	zassert_true(found, "Temporary address not found for iface %p", iface);
+#endif
+}
+
+ZTEST(net_ipv6, test_privacy_extension_filters)
+{
+#if defined(CONFIG_NET_IPV6_PE_ENABLE)
+#if CONFIG_NET_IPV6_PE_FILTER_PREFIX_COUNT > 0
+	struct in6_addr prefix1 = { { { 0x3f, 0xfe, 0x05, 0x07, 0, 0, 0, 1,
+					0, 0, 0, 0, 0, 0, 0, 0 } } };
+	struct in6_addr prefix2 = { { { 0x3f, 0xfe, 0x04, 0x07, 0, 0, 0, 1,
+					0, 0, 0, 0, 0, 0, 0, 0 } } };
+	struct in6_addr prefix3 = { { { 0x3f, 0xfe, 0x03, 0x07, 0, 0, 0, 1,
+					0, 0, 0, 0, 0, 0, 0, 0 } } };
+	struct net_if *iface = net_if_get_default();
+	bool found;
+	int ret;
+
+	/* First add denylist filters */
+	ret = net_ipv6_pe_add_filter(&prefix1, true);
+	zassert_equal(ret, 0, "Filter cannot be added (%d)", ret);
+
+	ret = net_ipv6_pe_add_filter(&prefix2, true);
+	zassert_equal(ret, 0, "Filter cannot be added (%d)", ret);
+
+	ret = net_ipv6_pe_add_filter(&prefix3, true);
+	zassert_true(ret < 0, "Filter could be added");
+
+	/* Then delete them */
+	ret = net_ipv6_pe_del_filter(&prefix1);
+	zassert_equal(ret, 0, "Filter cannot be deleted (%d)", ret);
+
+	ret = net_ipv6_pe_del_filter(&prefix2);
+	zassert_equal(ret, 0, "Filter cannot be deleted (%d)", ret);
+
+	ret = net_ipv6_pe_del_filter(&prefix2);
+	zassert_true(ret < 0, "Filter found (%d)", ret);
+
+	/* Then add allowlist filter */
+	ret = net_ipv6_pe_add_filter(&prefix1, false);
+	zassert_equal(ret, 0, "Filter cannot be added (%d)", ret);
+
+	/* Send RS again as we have now PE allowlist filter in place */
+	rs_message();
+
+	/* IP stack needs to process the packet */
+	k_sleep(K_MSEC(150));
+
+	found = is_pe_address_found(iface, &prefix1);
+	zassert_true(found, "Temporary address not found for iface %p", iface);
+
+	/* Then try with denylisted filter */
+	ret = net_ipv6_pe_del_filter(&prefix1);
+	zassert_equal(ret, 0, "Filter cannot be deleted (%d)", ret);
+
+	ret = net_ipv6_pe_add_filter(&prefix1, true);
+	zassert_equal(ret, 0, "Filter cannot be added (%d)", ret);
+
+	k_sleep(K_MSEC(10));
+
+	/* Send RS again as we have now PE denylist filter in place */
+	rs_message();
+
+	k_sleep(K_MSEC(150));
+
+	found = is_pe_address_found(iface, &prefix1);
+	zassert_false(found, "Temporary address found for iface %p", iface);
+
+	ret = net_ipv6_pe_del_filter(&prefix1);
+	zassert_equal(ret, 0, "Filter cannot be deleted (%d)", ret);
+
+	/* Add the temp address back for the next tests */
+	ret = net_ipv6_pe_add_filter(&prefix1, false);
+	zassert_equal(ret, 0, "Filter cannot be added (%d)", ret);
+
+	k_sleep(K_MSEC(50));
+
+	/* Send RS again as we have now PE allowlist filter in place */
+	rs_message();
+
+	k_sleep(K_MSEC(150));
+
+	found = is_pe_address_found(iface, &prefix1);
+	zassert_true(found, "Temporary address not found for iface %p", iface);
+#endif
+#endif
+}
+
+ZTEST(net_ipv6, test_privacy_extension_get_addr)
+{
+#if defined(CONFIG_NET_IPV6_PE_ENABLE)
+	struct in6_addr dst_addr = { { { 0x3f, 0xfe, 0x05, 0x07, 0, 0, 0, 1,
+				       0, 0, 2, 3, 4, 5, 6, 7 } } };
+	struct net_if *iface = net_if_get_default();
+	struct in6_addr *public_addr = NULL;
+	struct in6_addr *temp_addr = NULL;
+	const struct in6_addr *src_addr;
+
+	get_pe_addresses(iface, &public_addr, &temp_addr);
+
+	zassert_not_null(public_addr, "No public address found");
+	zassert_not_null(temp_addr, "No temporary address found");
+
+	src_addr = net_if_ipv6_select_src_addr(iface, &dst_addr);
+	zassert_not_null(src_addr, "No suitable source address found");
+
+	if (iface->pe_prefer_public) {
+		zassert_true(net_ipv6_addr_cmp(src_addr, public_addr),
+			     "Non public address selected");
+	} else {
+		zassert_true(net_ipv6_addr_cmp(src_addr, temp_addr),
+			     "Non temporary address selected");
+	}
+#endif
 }
 
 ZTEST(net_ipv6, test_y_dst_unjoined_group_mcast_recv)
