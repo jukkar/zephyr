@@ -4541,79 +4541,79 @@ typedef struct {
   __I  uint32_t GMAC_PEFTN;     /**< (GMAC Offset: 0x1F4) PTP Peer Event Frame Transmitted Nanoseconds Register */
   __I  uint32_t GMAC_PEFRSL;    /**< (GMAC Offset: 0x1F8) PTP Peer Event Frame Received Seconds Low Register */
   __I  uint32_t GMAC_PEFRN;     /**< (GMAC Offset: 0x1FC) PTP Peer Event Frame Received Nanoseconds Register */
-  RoReg8  Reserved6[0x1FC];
-  __I  uint32_t GMAC_ISRPQ[2];  /**< (GMAC Offset: 0x3FC) Interrupt Status Register Priority Queue (index = 1) 0 */
-  RoReg8  Reserved7[0x38];
-  __IO uint32_t GMAC_TBQBAPQ[2]; /**< (GMAC Offset: 0x43C) Transmit Buffer Queue Base Address Register Priority Queue (index = 1) 0 */
-  RoReg8  Reserved8[0x38];
-  __IO uint32_t GMAC_RBQBAPQ[2]; /**< (GMAC Offset: 0x47C) Receive Buffer Queue Base Address Register Priority Queue (index = 1) 0 */
-  RoReg8  Reserved9[0x18];
-  __IO uint32_t GMAC_RBSRPQ[2]; /**< (GMAC Offset: 0x49C) Receive Buffer Size Register Priority Queue (index = 1) 0 */
-  RoReg8  Reserved10[0x18];
+  __I  uint32_t Reserved6[128];
+  __I  uint32_t GMAC_ISRPQ[5];  /**< (GMAC Offset: 0x400) Interrupt Status Register Priority Queue  (index = 1) 0 */
+  __I  uint32_t Reserved7[11];
+  __IO uint32_t GMAC_TBQBAPQ[5]; /**< (GMAC Offset: 0x440) Transmit Buffer Queue Base Address Register Priority Queue  (index = 1) 0 */
+  __I  uint32_t Reserved8[11];
+  __IO uint32_t GMAC_RBQBAPQ[5]; /**< (GMAC Offset: 0x480) Receive Buffer Queue Base Address Register Priority Queue  (index = 1) 0 */
+  __I  uint32_t Reserved9[3];
+  __IO uint32_t GMAC_RBSRPQ[5]; /**< (GMAC Offset: 0x4A0) Receive Buffer Size Register Priority Queue  (index = 1) 0 */
+  __I  uint32_t Reserved10[2];
   __IO uint32_t GMAC_CBSCR;     /**< (GMAC Offset: 0x4BC) Credit-Based Shaping Control Register */
   __IO uint32_t GMAC_CBSISQA;   /**< (GMAC Offset: 0x4C0) Credit-Based Shaping IdleSlope Register for Queue A */
   __IO uint32_t GMAC_CBSISQB;   /**< (GMAC Offset: 0x4C4) Credit-Based Shaping IdleSlope Register for Queue B */
-  RoReg8  Reserved11[0x38];
-  __IO uint32_t GMAC_ST1RPQ[4]; /**< (GMAC Offset: 0x500) Screening Type 1 Register Priority Queue (index = 0) 0 */
-  RoReg8  Reserved12[0x30];
-  __IO uint32_t GMAC_ST2RPQ[8]; /**< (GMAC Offset: 0x540) Screening Type 2 Register Priority Queue (index = 0) 0 */
-  RoReg8  Reserved13[0x9C];
-  __O  uint32_t GMAC_IERPQ[2];  /**< (GMAC Offset: 0x5FC) Interrupt Enable Register Priority Queue (index = 1) 0 */
-  RoReg8  Reserved14[0x18];
-  __O  uint32_t GMAC_IDRPQ[2];  /**< (GMAC Offset: 0x61C) Interrupt Disable Register Priority Queue (index = 1) 0 */
-  RoReg8  Reserved15[0x18];
-  __IO uint32_t GMAC_IMRPQ[2];  /**< (GMAC Offset: 0x63C) Interrupt Mask Register Priority Queue (index = 1) 0 */
-  RoReg8  Reserved16[0x9C];
-  __IO uint32_t GMAC_ST2ER[4];  /**< (GMAC Offset: 0x6E0) Screening Type 2 Ethertype Register (index = 0) 0 */
-  RoReg8  Reserved17[0x10];
-  __IO uint32_t GMAC_ST2CW00;   /**< (GMAC Offset: 0x700) Screening Type 2 Compare Word 0 Register (index = 0) */
-  __IO uint32_t GMAC_ST2CW10;   /**< (GMAC Offset: 0x704) Screening Type 2 Compare Word 1 Register (index = 0) */
-  __IO uint32_t GMAC_ST2CW01;   /**< (GMAC Offset: 0x708) Screening Type 2 Compare Word 0 Register (index = 1) */
-  __IO uint32_t GMAC_ST2CW11;   /**< (GMAC Offset: 0x70C) Screening Type 2 Compare Word 1 Register (index = 1) */
-  __IO uint32_t GMAC_ST2CW02;   /**< (GMAC Offset: 0x710) Screening Type 2 Compare Word 0 Register (index = 2) */
-  __IO uint32_t GMAC_ST2CW12;   /**< (GMAC Offset: 0x714) Screening Type 2 Compare Word 1 Register (index = 2) */
-  __IO uint32_t GMAC_ST2CW03;   /**< (GMAC Offset: 0x718) Screening Type 2 Compare Word 0 Register (index = 3) */
-  __IO uint32_t GMAC_ST2CW13;   /**< (GMAC Offset: 0x71C) Screening Type 2 Compare Word 1 Register (index = 3) */
-  __IO uint32_t GMAC_ST2CW04;   /**< (GMAC Offset: 0x720) Screening Type 2 Compare Word 0 Register (index = 4) */
-  __IO uint32_t GMAC_ST2CW14;   /**< (GMAC Offset: 0x724) Screening Type 2 Compare Word 1 Register (index = 4) */
-  __IO uint32_t GMAC_ST2CW05;   /**< (GMAC Offset: 0x728) Screening Type 2 Compare Word 0 Register (index = 5) */
-  __IO uint32_t GMAC_ST2CW15;   /**< (GMAC Offset: 0x72C) Screening Type 2 Compare Word 1 Register (index = 5) */
-  __IO uint32_t GMAC_ST2CW06;   /**< (GMAC Offset: 0x730) Screening Type 2 Compare Word 0 Register (index = 6) */
-  __IO uint32_t GMAC_ST2CW16;   /**< (GMAC Offset: 0x734) Screening Type 2 Compare Word 1 Register (index = 6) */
-  __IO uint32_t GMAC_ST2CW07;   /**< (GMAC Offset: 0x738) Screening Type 2 Compare Word 0 Register (index = 7) */
-  __IO uint32_t GMAC_ST2CW17;   /**< (GMAC Offset: 0x73C) Screening Type 2 Compare Word 1 Register (index = 7) */
-  __IO uint32_t GMAC_ST2CW08;   /**< (GMAC Offset: 0x740) Screening Type 2 Compare Word 0 Register (index = 8) */
-  __IO uint32_t GMAC_ST2CW18;   /**< (GMAC Offset: 0x744) Screening Type 2 Compare Word 1 Register (index = 8) */
-  __IO uint32_t GMAC_ST2CW09;   /**< (GMAC Offset: 0x748) Screening Type 2 Compare Word 0 Register (index = 9) */
-  __IO uint32_t GMAC_ST2CW19;   /**< (GMAC Offset: 0x74C) Screening Type 2 Compare Word 1 Register (index = 9) */
-  __IO uint32_t GMAC_ST2CW010;  /**< (GMAC Offset: 0x750) Screening Type 2 Compare Word 0 Register (index = 10) */
-  __IO uint32_t GMAC_ST2CW110;  /**< (GMAC Offset: 0x754) Screening Type 2 Compare Word 1 Register (index = 10) */
-  __IO uint32_t GMAC_ST2CW011;  /**< (GMAC Offset: 0x758) Screening Type 2 Compare Word 0 Register (index = 11) */
-  __IO uint32_t GMAC_ST2CW111;  /**< (GMAC Offset: 0x75C) Screening Type 2 Compare Word 1 Register (index = 11) */
-  __IO uint32_t GMAC_ST2CW012;  /**< (GMAC Offset: 0x760) Screening Type 2 Compare Word 0 Register (index = 12) */
-  __IO uint32_t GMAC_ST2CW112;  /**< (GMAC Offset: 0x764) Screening Type 2 Compare Word 1 Register (index = 12) */
-  __IO uint32_t GMAC_ST2CW013;  /**< (GMAC Offset: 0x768) Screening Type 2 Compare Word 0 Register (index = 13) */
-  __IO uint32_t GMAC_ST2CW113;  /**< (GMAC Offset: 0x76C) Screening Type 2 Compare Word 1 Register (index = 13) */
-  __IO uint32_t GMAC_ST2CW014;  /**< (GMAC Offset: 0x770) Screening Type 2 Compare Word 0 Register (index = 14) */
-  __IO uint32_t GMAC_ST2CW114;  /**< (GMAC Offset: 0x774) Screening Type 2 Compare Word 1 Register (index = 14) */
-  __IO uint32_t GMAC_ST2CW015;  /**< (GMAC Offset: 0x778) Screening Type 2 Compare Word 0 Register (index = 15) */
-  __IO uint32_t GMAC_ST2CW115;  /**< (GMAC Offset: 0x77C) Screening Type 2 Compare Word 1 Register (index = 15) */
-  __IO uint32_t GMAC_ST2CW016;  /**< (GMAC Offset: 0x780) Screening Type 2 Compare Word 0 Register (index = 16) */
-  __IO uint32_t GMAC_ST2CW116;  /**< (GMAC Offset: 0x784) Screening Type 2 Compare Word 1 Register (index = 16) */
-  __IO uint32_t GMAC_ST2CW017;  /**< (GMAC Offset: 0x788) Screening Type 2 Compare Word 0 Register (index = 17) */
-  __IO uint32_t GMAC_ST2CW117;  /**< (GMAC Offset: 0x78C) Screening Type 2 Compare Word 1 Register (index = 17) */
-  __IO uint32_t GMAC_ST2CW018;  /**< (GMAC Offset: 0x790) Screening Type 2 Compare Word 0 Register (index = 18) */
-  __IO uint32_t GMAC_ST2CW118;  /**< (GMAC Offset: 0x794) Screening Type 2 Compare Word 1 Register (index = 18) */
-  __IO uint32_t GMAC_ST2CW019;  /**< (GMAC Offset: 0x798) Screening Type 2 Compare Word 0 Register (index = 19) */
-  __IO uint32_t GMAC_ST2CW119;  /**< (GMAC Offset: 0x79C) Screening Type 2 Compare Word 1 Register (index = 19) */
-  __IO uint32_t GMAC_ST2CW020;  /**< (GMAC Offset: 0x7A0) Screening Type 2 Compare Word 0 Register (index = 20) */
-  __IO uint32_t GMAC_ST2CW120;  /**< (GMAC Offset: 0x7A4) Screening Type 2 Compare Word 1 Register (index = 20) */
-  __IO uint32_t GMAC_ST2CW021;  /**< (GMAC Offset: 0x7A8) Screening Type 2 Compare Word 0 Register (index = 21) */
-  __IO uint32_t GMAC_ST2CW121;  /**< (GMAC Offset: 0x7AC) Screening Type 2 Compare Word 1 Register (index = 21) */
-  __IO uint32_t GMAC_ST2CW022;  /**< (GMAC Offset: 0x7B0) Screening Type 2 Compare Word 0 Register (index = 22) */
-  __IO uint32_t GMAC_ST2CW122;  /**< (GMAC Offset: 0x7B4) Screening Type 2 Compare Word 1 Register (index = 22) */
-  __IO uint32_t GMAC_ST2CW023;  /**< (GMAC Offset: 0x7B8) Screening Type 2 Compare Word 0 Register (index = 23) */
-  __IO uint32_t GMAC_ST2CW123;  /**< (GMAC Offset: 0x7BC) Screening Type 2 Compare Word 1 Register (index = 23) */
+  __I  uint32_t Reserved11[14];
+  __IO uint32_t GMAC_ST1RPQ[4]; /**< (GMAC Offset: 0x500) Screening Type 1 Register Priority Queue  (index = 0) 0 */
+  __I  uint32_t Reserved12[12];
+  __IO uint32_t GMAC_ST2RPQ[8]; /**< (GMAC Offset: 0x540) Screening Type 2 Register Priority Queue  (index = 0) 0 */
+  __I  uint32_t Reserved13[40];
+  __O  uint32_t GMAC_IERPQ[5];  /**< (GMAC Offset: 0x600) Interrupt Enable Register Priority Queue  (index = 1) 0 */
+  __I  uint32_t Reserved14[3];
+  __O  uint32_t GMAC_IDRPQ[5];  /**< (GMAC Offset: 0x620) Interrupt Disable Register Priority Queue  (index = 1) 0 */
+  __I  uint32_t Reserved15[3];
+  __IO uint32_t GMAC_IMRPQ[5];  /**< (GMAC Offset: 0x640) Interrupt Mask Register Priority Queue  (index = 1) 0 */
+  __I  uint32_t Reserved16[35];
+  __IO uint32_t GMAC_ST2ER[4];  /**< (GMAC Offset: 0x6E0) Screening Type 2 Ethertype Register  (index = 0) 0 */
+  __I  uint32_t Reserved17[4];
+  __IO uint32_t GMAC_ST2CW00;   /**< (GMAC Offset: 0x700) Screening Type 2 Compare Word 0 Register  (index = 0) */
+  __IO uint32_t GMAC_ST2CW10;   /**< (GMAC Offset: 0x704) Screening Type 2 Compare Word 1 Register  (index = 0) */
+  __IO uint32_t GMAC_ST2CW01;   /**< (GMAC Offset: 0x708) Screening Type 2 Compare Word 0 Register  (index = 1) */
+  __IO uint32_t GMAC_ST2CW11;   /**< (GMAC Offset: 0x70C) Screening Type 2 Compare Word 1 Register  (index = 1) */
+  __IO uint32_t GMAC_ST2CW02;   /**< (GMAC Offset: 0x710) Screening Type 2 Compare Word 0 Register  (index = 2) */
+  __IO uint32_t GMAC_ST2CW12;   /**< (GMAC Offset: 0x714) Screening Type 2 Compare Word 1 Register  (index = 2) */
+  __IO uint32_t GMAC_ST2CW03;   /**< (GMAC Offset: 0x718) Screening Type 2 Compare Word 0 Register  (index = 3) */
+  __IO uint32_t GMAC_ST2CW13;   /**< (GMAC Offset: 0x71C) Screening Type 2 Compare Word 1 Register  (index = 3) */
+  __IO uint32_t GMAC_ST2CW04;   /**< (GMAC Offset: 0x720) Screening Type 2 Compare Word 0 Register  (index = 4) */
+  __IO uint32_t GMAC_ST2CW14;   /**< (GMAC Offset: 0x724) Screening Type 2 Compare Word 1 Register  (index = 4) */
+  __IO uint32_t GMAC_ST2CW05;   /**< (GMAC Offset: 0x728) Screening Type 2 Compare Word 0 Register  (index = 5) */
+  __IO uint32_t GMAC_ST2CW15;   /**< (GMAC Offset: 0x72C) Screening Type 2 Compare Word 1 Register  (index = 5) */
+  __IO uint32_t GMAC_ST2CW06;   /**< (GMAC Offset: 0x730) Screening Type 2 Compare Word 0 Register  (index = 6) */
+  __IO uint32_t GMAC_ST2CW16;   /**< (GMAC Offset: 0x734) Screening Type 2 Compare Word 1 Register  (index = 6) */
+  __IO uint32_t GMAC_ST2CW07;   /**< (GMAC Offset: 0x738) Screening Type 2 Compare Word 0 Register  (index = 7) */
+  __IO uint32_t GMAC_ST2CW17;   /**< (GMAC Offset: 0x73C) Screening Type 2 Compare Word 1 Register  (index = 7) */
+  __IO uint32_t GMAC_ST2CW08;   /**< (GMAC Offset: 0x740) Screening Type 2 Compare Word 0 Register  (index = 8) */
+  __IO uint32_t GMAC_ST2CW18;   /**< (GMAC Offset: 0x744) Screening Type 2 Compare Word 1 Register  (index = 8) */
+  __IO uint32_t GMAC_ST2CW09;   /**< (GMAC Offset: 0x748) Screening Type 2 Compare Word 0 Register  (index = 9) */
+  __IO uint32_t GMAC_ST2CW19;   /**< (GMAC Offset: 0x74C) Screening Type 2 Compare Word 1 Register  (index = 9) */
+  __IO uint32_t GMAC_ST2CW010;  /**< (GMAC Offset: 0x750) Screening Type 2 Compare Word 0 Register  (index = 10) */
+  __IO uint32_t GMAC_ST2CW110;  /**< (GMAC Offset: 0x754) Screening Type 2 Compare Word 1 Register  (index = 10) */
+  __IO uint32_t GMAC_ST2CW011;  /**< (GMAC Offset: 0x758) Screening Type 2 Compare Word 0 Register  (index = 11) */
+  __IO uint32_t GMAC_ST2CW111;  /**< (GMAC Offset: 0x75C) Screening Type 2 Compare Word 1 Register  (index = 11) */
+  __IO uint32_t GMAC_ST2CW012;  /**< (GMAC Offset: 0x760) Screening Type 2 Compare Word 0 Register  (index = 12) */
+  __IO uint32_t GMAC_ST2CW112;  /**< (GMAC Offset: 0x764) Screening Type 2 Compare Word 1 Register  (index = 12) */
+  __IO uint32_t GMAC_ST2CW013;  /**< (GMAC Offset: 0x768) Screening Type 2 Compare Word 0 Register  (index = 13) */
+  __IO uint32_t GMAC_ST2CW113;  /**< (GMAC Offset: 0x76C) Screening Type 2 Compare Word 1 Register  (index = 13) */
+  __IO uint32_t GMAC_ST2CW014;  /**< (GMAC Offset: 0x770) Screening Type 2 Compare Word 0 Register  (index = 14) */
+  __IO uint32_t GMAC_ST2CW114;  /**< (GMAC Offset: 0x774) Screening Type 2 Compare Word 1 Register  (index = 14) */
+  __IO uint32_t GMAC_ST2CW015;  /**< (GMAC Offset: 0x778) Screening Type 2 Compare Word 0 Register  (index = 15) */
+  __IO uint32_t GMAC_ST2CW115;  /**< (GMAC Offset: 0x77C) Screening Type 2 Compare Word 1 Register  (index = 15) */
+  __IO uint32_t GMAC_ST2CW016;  /**< (GMAC Offset: 0x780) Screening Type 2 Compare Word 0 Register  (index = 16) */
+  __IO uint32_t GMAC_ST2CW116;  /**< (GMAC Offset: 0x784) Screening Type 2 Compare Word 1 Register  (index = 16) */
+  __IO uint32_t GMAC_ST2CW017;  /**< (GMAC Offset: 0x788) Screening Type 2 Compare Word 0 Register  (index = 17) */
+  __IO uint32_t GMAC_ST2CW117;  /**< (GMAC Offset: 0x78C) Screening Type 2 Compare Word 1 Register  (index = 17) */
+  __IO uint32_t GMAC_ST2CW018;  /**< (GMAC Offset: 0x790) Screening Type 2 Compare Word 0 Register  (index = 18) */
+  __IO uint32_t GMAC_ST2CW118;  /**< (GMAC Offset: 0x794) Screening Type 2 Compare Word 1 Register  (index = 18) */
+  __IO uint32_t GMAC_ST2CW019;  /**< (GMAC Offset: 0x798) Screening Type 2 Compare Word 0 Register  (index = 19) */
+  __IO uint32_t GMAC_ST2CW119;  /**< (GMAC Offset: 0x79C) Screening Type 2 Compare Word 1 Register  (index = 19) */
+  __IO uint32_t GMAC_ST2CW020;  /**< (GMAC Offset: 0x7A0) Screening Type 2 Compare Word 0 Register  (index = 20) */
+  __IO uint32_t GMAC_ST2CW120;  /**< (GMAC Offset: 0x7A4) Screening Type 2 Compare Word 1 Register  (index = 20) */
+  __IO uint32_t GMAC_ST2CW021;  /**< (GMAC Offset: 0x7A8) Screening Type 2 Compare Word 0 Register  (index = 21) */
+  __IO uint32_t GMAC_ST2CW121;  /**< (GMAC Offset: 0x7AC) Screening Type 2 Compare Word 1 Register  (index = 21) */
+  __IO uint32_t GMAC_ST2CW022;  /**< (GMAC Offset: 0x7B0) Screening Type 2 Compare Word 0 Register  (index = 22) */
+  __IO uint32_t GMAC_ST2CW122;  /**< (GMAC Offset: 0x7B4) Screening Type 2 Compare Word 1 Register  (index = 22) */
+  __IO uint32_t GMAC_ST2CW023;  /**< (GMAC Offset: 0x7B8) Screening Type 2 Compare Word 0 Register  (index = 23) */
+  __IO uint32_t GMAC_ST2CW123;  /**< (GMAC Offset: 0x7BC) Screening Type 2 Compare Word 1 Register  (index = 23) */
 } Gmac;
 
 #elif COMPONENT_TYPEDEF_STYLE == 'N'
@@ -4728,79 +4728,79 @@ typedef struct {
   __I  GMAC_PEFTN_Type                GMAC_PEFTN;     /**< Offset: 0x1F4 (R/   32) PTP Peer Event Frame Transmitted Nanoseconds Register */
   __I  GMAC_PEFRSL_Type               GMAC_PEFRSL;    /**< Offset: 0x1F8 (R/   32) PTP Peer Event Frame Received Seconds Low Register */
   __I  GMAC_PEFRN_Type                GMAC_PEFRN;     /**< Offset: 0x1FC (R/   32) PTP Peer Event Frame Received Nanoseconds Register */
-  __I  uint32_t                       Reserved6[127];
-  __I  GMAC_ISRPQ_Type                GMAC_ISRPQ[2];  /**< Offset: 0x3FC (R/   32) Interrupt Status Register Priority Queue (index = 1) 0 */
-  __I  uint32_t                       Reserved7[14];
-  __IO GMAC_TBQBAPQ_Type              GMAC_TBQBAPQ[2]; /**< Offset: 0x43C (R/W  32) Transmit Buffer Queue Base Address Register Priority Queue (index = 1) 0 */
-  __I  uint32_t                       Reserved8[14];
-  __IO GMAC_RBQBAPQ_Type              GMAC_RBQBAPQ[2]; /**< Offset: 0x47C (R/W  32) Receive Buffer Queue Base Address Register Priority Queue (index = 1) 0 */
-  __I  uint32_t                       Reserved9[6];
-  __IO GMAC_RBSRPQ_Type               GMAC_RBSRPQ[2]; /**< Offset: 0x49C (R/W  32) Receive Buffer Size Register Priority Queue (index = 1) 0 */
-  __I  uint32_t                       Reserved10[6];
+       RoReg8                         Reserved6[0x200];
+  __I  GMAC_ISRPQ_Type                GMAC_ISRPQ[5];  /**< Offset: 0x400 (R/   32) Interrupt Status Register Priority Queue  (index = 1) 0 */
+       RoReg8                         Reserved7[0x2C];
+  __IO GMAC_TBQBAPQ_Type              GMAC_TBQBAPQ[5]; /**< Offset: 0x440 (R/W  32) Transmit Buffer Queue Base Address Register Priority Queue  (index = 1) 0 */
+       RoReg8                         Reserved8[0x2C];
+  __IO GMAC_RBQBAPQ_Type              GMAC_RBQBAPQ[5]; /**< Offset: 0x480 (R/W  32) Receive Buffer Queue Base Address Register Priority Queue  (index = 1) 0 */
+       RoReg8                         Reserved9[0xC];
+  __IO GMAC_RBSRPQ_Type               GMAC_RBSRPQ[5]; /**< Offset: 0x4A0 (R/W  32) Receive Buffer Size Register Priority Queue  (index = 1) 0 */
+       RoReg8                         Reserved10[0x8];
   __IO GMAC_CBSCR_Type                GMAC_CBSCR;     /**< Offset: 0x4BC (R/W  32) Credit-Based Shaping Control Register */
   __IO GMAC_CBSISQA_Type              GMAC_CBSISQA;   /**< Offset: 0x4C0 (R/W  32) Credit-Based Shaping IdleSlope Register for Queue A */
   __IO GMAC_CBSISQB_Type              GMAC_CBSISQB;   /**< Offset: 0x4C4 (R/W  32) Credit-Based Shaping IdleSlope Register for Queue B */
-  __I  uint32_t                       Reserved11[14];
-  __IO GMAC_ST1RPQ_Type               GMAC_ST1RPQ[4]; /**< Offset: 0x500 (R/W  32) Screening Type 1 Register Priority Queue (index = 0) 0 */
-  __I  uint32_t                       Reserved12[12];
-  __IO GMAC_ST2RPQ_Type               GMAC_ST2RPQ[8]; /**< Offset: 0x540 (R/W  32) Screening Type 2 Register Priority Queue (index = 0) 0 */
-  __I  uint32_t                       Reserved13[39];
-  __O  GMAC_IERPQ_Type                GMAC_IERPQ[2];  /**< Offset: 0x5FC ( /W  32) Interrupt Enable Register Priority Queue (index = 1) 0 */
-  __I  uint32_t                       Reserved14[6];
-  __O  GMAC_IDRPQ_Type                GMAC_IDRPQ[2];  /**< Offset: 0x61C ( /W  32) Interrupt Disable Register Priority Queue (index = 1) 0 */
-  __I  uint32_t                       Reserved15[6];
-  __IO GMAC_IMRPQ_Type                GMAC_IMRPQ[2];  /**< Offset: 0x63C (R/W  32) Interrupt Mask Register Priority Queue (index = 1) 0 */
-  __I  uint32_t                       Reserved16[39];
-  __IO GMAC_ST2ER_Type                GMAC_ST2ER[4];  /**< Offset: 0x6E0 (R/W  32) Screening Type 2 Ethertype Register (index = 0) 0 */
-  __I  uint32_t                       Reserved17[4];
-  __IO GMAC_ST2CW00_Type              GMAC_ST2CW00;   /**< Offset: 0x700 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 0) */
-  __IO GMAC_ST2CW10_Type              GMAC_ST2CW10;   /**< Offset: 0x704 (R/W  32) Screening Type 2 Compare Word 1 Register (index = 0) */
-  __IO GMAC_ST2CW01_Type              GMAC_ST2CW01;   /**< Offset: 0x708 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 1) */
-  __IO GMAC_ST2CW11_Type              GMAC_ST2CW11;   /**< Offset: 0x70C (R/W  32) Screening Type 2 Compare Word 1 Register (index = 1) */
-  __IO GMAC_ST2CW02_Type              GMAC_ST2CW02;   /**< Offset: 0x710 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 2) */
-  __IO GMAC_ST2CW12_Type              GMAC_ST2CW12;   /**< Offset: 0x714 (R/W  32) Screening Type 2 Compare Word 1 Register (index = 2) */
-  __IO GMAC_ST2CW03_Type              GMAC_ST2CW03;   /**< Offset: 0x718 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 3) */
-  __IO GMAC_ST2CW13_Type              GMAC_ST2CW13;   /**< Offset: 0x71C (R/W  32) Screening Type 2 Compare Word 1 Register (index = 3) */
-  __IO GMAC_ST2CW04_Type              GMAC_ST2CW04;   /**< Offset: 0x720 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 4) */
-  __IO GMAC_ST2CW14_Type              GMAC_ST2CW14;   /**< Offset: 0x724 (R/W  32) Screening Type 2 Compare Word 1 Register (index = 4) */
-  __IO GMAC_ST2CW05_Type              GMAC_ST2CW05;   /**< Offset: 0x728 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 5) */
-  __IO GMAC_ST2CW15_Type              GMAC_ST2CW15;   /**< Offset: 0x72C (R/W  32) Screening Type 2 Compare Word 1 Register (index = 5) */
-  __IO GMAC_ST2CW06_Type              GMAC_ST2CW06;   /**< Offset: 0x730 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 6) */
-  __IO GMAC_ST2CW16_Type              GMAC_ST2CW16;   /**< Offset: 0x734 (R/W  32) Screening Type 2 Compare Word 1 Register (index = 6) */
-  __IO GMAC_ST2CW07_Type              GMAC_ST2CW07;   /**< Offset: 0x738 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 7) */
-  __IO GMAC_ST2CW17_Type              GMAC_ST2CW17;   /**< Offset: 0x73C (R/W  32) Screening Type 2 Compare Word 1 Register (index = 7) */
-  __IO GMAC_ST2CW08_Type              GMAC_ST2CW08;   /**< Offset: 0x740 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 8) */
-  __IO GMAC_ST2CW18_Type              GMAC_ST2CW18;   /**< Offset: 0x744 (R/W  32) Screening Type 2 Compare Word 1 Register (index = 8) */
-  __IO GMAC_ST2CW09_Type              GMAC_ST2CW09;   /**< Offset: 0x748 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 9) */
-  __IO GMAC_ST2CW19_Type              GMAC_ST2CW19;   /**< Offset: 0x74C (R/W  32) Screening Type 2 Compare Word 1 Register (index = 9) */
-  __IO GMAC_ST2CW010_Type             GMAC_ST2CW010;  /**< Offset: 0x750 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 10) */
-  __IO GMAC_ST2CW110_Type             GMAC_ST2CW110;  /**< Offset: 0x754 (R/W  32) Screening Type 2 Compare Word 1 Register (index = 10) */
-  __IO GMAC_ST2CW011_Type             GMAC_ST2CW011;  /**< Offset: 0x758 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 11) */
-  __IO GMAC_ST2CW111_Type             GMAC_ST2CW111;  /**< Offset: 0x75C (R/W  32) Screening Type 2 Compare Word 1 Register (index = 11) */
-  __IO GMAC_ST2CW012_Type             GMAC_ST2CW012;  /**< Offset: 0x760 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 12) */
-  __IO GMAC_ST2CW112_Type             GMAC_ST2CW112;  /**< Offset: 0x764 (R/W  32) Screening Type 2 Compare Word 1 Register (index = 12) */
-  __IO GMAC_ST2CW013_Type             GMAC_ST2CW013;  /**< Offset: 0x768 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 13) */
-  __IO GMAC_ST2CW113_Type             GMAC_ST2CW113;  /**< Offset: 0x76C (R/W  32) Screening Type 2 Compare Word 1 Register (index = 13) */
-  __IO GMAC_ST2CW014_Type             GMAC_ST2CW014;  /**< Offset: 0x770 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 14) */
-  __IO GMAC_ST2CW114_Type             GMAC_ST2CW114;  /**< Offset: 0x774 (R/W  32) Screening Type 2 Compare Word 1 Register (index = 14) */
-  __IO GMAC_ST2CW015_Type             GMAC_ST2CW015;  /**< Offset: 0x778 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 15) */
-  __IO GMAC_ST2CW115_Type             GMAC_ST2CW115;  /**< Offset: 0x77C (R/W  32) Screening Type 2 Compare Word 1 Register (index = 15) */
-  __IO GMAC_ST2CW016_Type             GMAC_ST2CW016;  /**< Offset: 0x780 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 16) */
-  __IO GMAC_ST2CW116_Type             GMAC_ST2CW116;  /**< Offset: 0x784 (R/W  32) Screening Type 2 Compare Word 1 Register (index = 16) */
-  __IO GMAC_ST2CW017_Type             GMAC_ST2CW017;  /**< Offset: 0x788 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 17) */
-  __IO GMAC_ST2CW117_Type             GMAC_ST2CW117;  /**< Offset: 0x78C (R/W  32) Screening Type 2 Compare Word 1 Register (index = 17) */
-  __IO GMAC_ST2CW018_Type             GMAC_ST2CW018;  /**< Offset: 0x790 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 18) */
-  __IO GMAC_ST2CW118_Type             GMAC_ST2CW118;  /**< Offset: 0x794 (R/W  32) Screening Type 2 Compare Word 1 Register (index = 18) */
-  __IO GMAC_ST2CW019_Type             GMAC_ST2CW019;  /**< Offset: 0x798 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 19) */
-  __IO GMAC_ST2CW119_Type             GMAC_ST2CW119;  /**< Offset: 0x79C (R/W  32) Screening Type 2 Compare Word 1 Register (index = 19) */
-  __IO GMAC_ST2CW020_Type             GMAC_ST2CW020;  /**< Offset: 0x7A0 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 20) */
-  __IO GMAC_ST2CW120_Type             GMAC_ST2CW120;  /**< Offset: 0x7A4 (R/W  32) Screening Type 2 Compare Word 1 Register (index = 20) */
-  __IO GMAC_ST2CW021_Type             GMAC_ST2CW021;  /**< Offset: 0x7A8 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 21) */
-  __IO GMAC_ST2CW121_Type             GMAC_ST2CW121;  /**< Offset: 0x7AC (R/W  32) Screening Type 2 Compare Word 1 Register (index = 21) */
-  __IO GMAC_ST2CW022_Type             GMAC_ST2CW022;  /**< Offset: 0x7B0 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 22) */
-  __IO GMAC_ST2CW122_Type             GMAC_ST2CW122;  /**< Offset: 0x7B4 (R/W  32) Screening Type 2 Compare Word 1 Register (index = 22) */
-  __IO GMAC_ST2CW023_Type             GMAC_ST2CW023;  /**< Offset: 0x7B8 (R/W  32) Screening Type 2 Compare Word 0 Register (index = 23) */
-  __IO GMAC_ST2CW123_Type             GMAC_ST2CW123;  /**< Offset: 0x7BC (R/W  32) Screening Type 2 Compare Word 1 Register (index = 23) */
+       RoReg8                         Reserved11[0x38];
+  __IO GMAC_ST1RPQ_Type               GMAC_ST1RPQ[4]; /**< Offset: 0x500 (R/W  32) Screening Type 1 Register Priority Queue  (index = 0) 0 */
+       RoReg8                         Reserved12[0x30];
+  __IO GMAC_ST2RPQ_Type               GMAC_ST2RPQ[8]; /**< Offset: 0x540 (R/W  32) Screening Type 2 Register Priority Queue  (index = 0) 0 */
+       RoReg8                         Reserved13[0xA0];
+  __O  GMAC_IERPQ_Type                GMAC_IERPQ[5];  /**< Offset: 0x600 ( /W  32) Interrupt Enable Register Priority Queue  (index = 1) 0 */
+       RoReg8                         Reserved14[0xC];
+  __O  GMAC_IDRPQ_Type                GMAC_IDRPQ[5];  /**< Offset: 0x620 ( /W  32) Interrupt Disable Register Priority Queue  (index = 1) 0 */
+       RoReg8                         Reserved15[0xC];
+  __IO GMAC_IMRPQ_Type                GMAC_IMRPQ[5];  /**< Offset: 0x640 (R/W  32) Interrupt Mask Register Priority Queue  (index = 1) 0 */
+       RoReg8                         Reserved16[0x8C];
+  __IO GMAC_ST2ER_Type                GMAC_ST2ER[4];  /**< Offset: 0x6E0 (R/W  32) Screening Type 2 Ethertype Register  (index = 0) 0 */
+       RoReg8                         Reserved17[0x10];
+  __IO GMAC_ST2CW00_Type              GMAC_ST2CW00;   /**< Offset: 0x700 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 0) */
+  __IO GMAC_ST2CW10_Type              GMAC_ST2CW10;   /**< Offset: 0x704 (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 0) */
+  __IO GMAC_ST2CW01_Type              GMAC_ST2CW01;   /**< Offset: 0x708 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 1) */
+  __IO GMAC_ST2CW11_Type              GMAC_ST2CW11;   /**< Offset: 0x70C (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 1) */
+  __IO GMAC_ST2CW02_Type              GMAC_ST2CW02;   /**< Offset: 0x710 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 2) */
+  __IO GMAC_ST2CW12_Type              GMAC_ST2CW12;   /**< Offset: 0x714 (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 2) */
+  __IO GMAC_ST2CW03_Type              GMAC_ST2CW03;   /**< Offset: 0x718 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 3) */
+  __IO GMAC_ST2CW13_Type              GMAC_ST2CW13;   /**< Offset: 0x71C (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 3) */
+  __IO GMAC_ST2CW04_Type              GMAC_ST2CW04;   /**< Offset: 0x720 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 4) */
+  __IO GMAC_ST2CW14_Type              GMAC_ST2CW14;   /**< Offset: 0x724 (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 4) */
+  __IO GMAC_ST2CW05_Type              GMAC_ST2CW05;   /**< Offset: 0x728 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 5) */
+  __IO GMAC_ST2CW15_Type              GMAC_ST2CW15;   /**< Offset: 0x72C (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 5) */
+  __IO GMAC_ST2CW06_Type              GMAC_ST2CW06;   /**< Offset: 0x730 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 6) */
+  __IO GMAC_ST2CW16_Type              GMAC_ST2CW16;   /**< Offset: 0x734 (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 6) */
+  __IO GMAC_ST2CW07_Type              GMAC_ST2CW07;   /**< Offset: 0x738 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 7) */
+  __IO GMAC_ST2CW17_Type              GMAC_ST2CW17;   /**< Offset: 0x73C (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 7) */
+  __IO GMAC_ST2CW08_Type              GMAC_ST2CW08;   /**< Offset: 0x740 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 8) */
+  __IO GMAC_ST2CW18_Type              GMAC_ST2CW18;   /**< Offset: 0x744 (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 8) */
+  __IO GMAC_ST2CW09_Type              GMAC_ST2CW09;   /**< Offset: 0x748 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 9) */
+  __IO GMAC_ST2CW19_Type              GMAC_ST2CW19;   /**< Offset: 0x74C (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 9) */
+  __IO GMAC_ST2CW010_Type             GMAC_ST2CW010;  /**< Offset: 0x750 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 10) */
+  __IO GMAC_ST2CW110_Type             GMAC_ST2CW110;  /**< Offset: 0x754 (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 10) */
+  __IO GMAC_ST2CW011_Type             GMAC_ST2CW011;  /**< Offset: 0x758 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 11) */
+  __IO GMAC_ST2CW111_Type             GMAC_ST2CW111;  /**< Offset: 0x75C (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 11) */
+  __IO GMAC_ST2CW012_Type             GMAC_ST2CW012;  /**< Offset: 0x760 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 12) */
+  __IO GMAC_ST2CW112_Type             GMAC_ST2CW112;  /**< Offset: 0x764 (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 12) */
+  __IO GMAC_ST2CW013_Type             GMAC_ST2CW013;  /**< Offset: 0x768 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 13) */
+  __IO GMAC_ST2CW113_Type             GMAC_ST2CW113;  /**< Offset: 0x76C (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 13) */
+  __IO GMAC_ST2CW014_Type             GMAC_ST2CW014;  /**< Offset: 0x770 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 14) */
+  __IO GMAC_ST2CW114_Type             GMAC_ST2CW114;  /**< Offset: 0x774 (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 14) */
+  __IO GMAC_ST2CW015_Type             GMAC_ST2CW015;  /**< Offset: 0x778 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 15) */
+  __IO GMAC_ST2CW115_Type             GMAC_ST2CW115;  /**< Offset: 0x77C (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 15) */
+  __IO GMAC_ST2CW016_Type             GMAC_ST2CW016;  /**< Offset: 0x780 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 16) */
+  __IO GMAC_ST2CW116_Type             GMAC_ST2CW116;  /**< Offset: 0x784 (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 16) */
+  __IO GMAC_ST2CW017_Type             GMAC_ST2CW017;  /**< Offset: 0x788 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 17) */
+  __IO GMAC_ST2CW117_Type             GMAC_ST2CW117;  /**< Offset: 0x78C (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 17) */
+  __IO GMAC_ST2CW018_Type             GMAC_ST2CW018;  /**< Offset: 0x790 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 18) */
+  __IO GMAC_ST2CW118_Type             GMAC_ST2CW118;  /**< Offset: 0x794 (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 18) */
+  __IO GMAC_ST2CW019_Type             GMAC_ST2CW019;  /**< Offset: 0x798 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 19) */
+  __IO GMAC_ST2CW119_Type             GMAC_ST2CW119;  /**< Offset: 0x79C (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 19) */
+  __IO GMAC_ST2CW020_Type             GMAC_ST2CW020;  /**< Offset: 0x7A0 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 20) */
+  __IO GMAC_ST2CW120_Type             GMAC_ST2CW120;  /**< Offset: 0x7A4 (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 20) */
+  __IO GMAC_ST2CW021_Type             GMAC_ST2CW021;  /**< Offset: 0x7A8 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 21) */
+  __IO GMAC_ST2CW121_Type             GMAC_ST2CW121;  /**< Offset: 0x7AC (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 21) */
+  __IO GMAC_ST2CW022_Type             GMAC_ST2CW022;  /**< Offset: 0x7B0 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 22) */
+  __IO GMAC_ST2CW122_Type             GMAC_ST2CW122;  /**< Offset: 0x7B4 (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 22) */
+  __IO GMAC_ST2CW023_Type             GMAC_ST2CW023;  /**< Offset: 0x7B8 (R/W  32) Screening Type 2 Compare Word 0 Register  (index = 23) */
+  __IO GMAC_ST2CW123_Type             GMAC_ST2CW123;  /**< Offset: 0x7BC (R/W  32) Screening Type 2 Compare Word 1 Register  (index = 23) */
 } Gmac;
 
 #else /* COMPONENT_TYPEDEF_STYLE */

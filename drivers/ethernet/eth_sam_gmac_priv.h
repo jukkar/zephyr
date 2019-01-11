@@ -20,7 +20,9 @@
 /** Memory alignment of the RX/TX Buffer Descriptor List */
 #define GMAC_DESC_ALIGNMENT               4
 /** Total number of queues supported by GMAC hardware module */
-#define GMAC_QUEUE_NO                     3
+#define GMAC_QUEUE_NO_REV_A               3
+#define GMAC_QUEUE_NO_REV_B               6
+#define GMAC_QUEUE_NO_MAX                 6
 /** Number of priority queues used */
 #define GMAC_PRIORITY_QUEUE_NO            (CONFIG_ETH_SAM_GMAC_QUEUES - 1)
 
@@ -48,6 +50,15 @@
 #define PRIORITY_QUEUE1_RX_DESC_COUNT         1
 #define PRIORITY_QUEUE1_TX_DESC_COUNT         1
 #endif
+
+#define PRIORITY_QUEUE3_RX_DESC_COUNT         1
+#define PRIORITY_QUEUE3_TX_DESC_COUNT         1
+
+#define PRIORITY_QUEUE4_RX_DESC_COUNT         1
+#define PRIORITY_QUEUE4_TX_DESC_COUNT         1
+
+#define PRIORITY_QUEUE5_RX_DESC_COUNT         1
+#define PRIORITY_QUEUE5_TX_DESC_COUNT         1
 
 /*
  * Receive buffer descriptor bit field definitions
@@ -139,6 +150,9 @@ enum queue_idx {
 	GMAC_QUE_0,  /** Main queue */
 	GMAC_QUE_1,  /** Priority queue 1 */
 	GMAC_QUE_2,  /** Priority queue 2 */
+	GMAC_QUE_3,  /** Priority queue 3 */
+	GMAC_QUE_4,  /** Priority queue 4 */
+	GMAC_QUE_5,  /** Priority queue 5 */
 };
 
 /** Minimal ring buffer implementation */
@@ -199,7 +213,7 @@ struct eth_sam_dev_data {
 	struct device *ptp_clock;
 #endif
 	u8_t mac_addr[6];
-	struct gmac_queue queue_list[GMAC_QUEUE_NO];
+	struct gmac_queue queue_list[GMAC_QUEUE_NO_MAX];
 };
 
 #define DEV_CFG(dev) \
