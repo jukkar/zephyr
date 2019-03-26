@@ -78,6 +78,8 @@ if(CONFIG_NETWORKING)
     if((CONFIG_NET_SLIP_TAP) OR (CONFIG_IEEE802154_UPIPE))
       set(QEMU_NET_STACK 1)
     endif()
+  elseif(CONFIG_NET_QEMU_PPP)
+      set(QEMU_NET_STACK 1)
   endif()
 endif()
 
@@ -140,15 +142,28 @@ elseif(QEMU_NET_STACK)
       # appending the instance name to the pid file we can easily run more
       # instances of the same sample.
 
-      if(${CMAKE_GENERATOR} STREQUAL "Unix Makefiles")
-        set(tmp_file unix:/tmp/slip.sock\${QEMU_INSTANCE})
+      if(CONFIG_NET_QEMU_PPP)
+	if(${CMAKE_GENERATOR} STREQUAL "Unix Makefiles")
+	  set(ppp_path unix:/tmp/ppp\${QEMU_INSTANCE})
+	else()
+	  set(ppp_path unix:/tmp/ppp${QEMU_INSTANCE})
+	endif()
+
+	list(APPEND MORE_FLAGS_FOR_${target}
+          -serial ${ppp_path}
+          )
       else()
-        set(tmp_file unix:/tmp/slip.sock${QEMU_INSTANCE})
+	if(${CMAKE_GENERATOR} STREQUAL "Unix Makefiles")
+          set(tmp_file unix:/tmp/slip.sock\${QEMU_INSTANCE})
+	else()
+          set(tmp_file unix:/tmp/slip.sock${QEMU_INSTANCE})
+	endif()
+
+	list(APPEND MORE_FLAGS_FOR_${target}
+          -serial ${tmp_file}
+          )
       endif()
 
-      list(APPEND MORE_FLAGS_FOR_${target}
-        -serial ${tmp_file}
-        )
     endif()
   endforeach()
 
