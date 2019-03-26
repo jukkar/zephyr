@@ -897,7 +897,7 @@ class SizeCalculator:
     ro_sections = ["text", "ctors", "init_array", "reset", "object_access",
                    "rodata", "devconfig", "net_l2", "vector", "sw_isr_table",
                    "_bt_settings_area", "_bt_services_area", "vectors",
-                   "net_socket_register"]
+                   "net_socket_register", "net_ppp_proto"]
 
     def __init__(self, filename, extra_sections):
         """Constructor
