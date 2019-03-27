@@ -21,6 +21,8 @@ LOG_MODULE_REGISTER(net_shell, LOG_LEVEL_DBG);
 
 #include <net/net_if.h>
 #include <net/dns_resolve.h>
+#include <net/ppp.h>
+#include <net/net_stats.h>
 #include <misc/printk.h>
 
 #include "route.h"
@@ -53,6 +55,11 @@ LOG_MODULE_REGISTER(net_shell, LOG_LEVEL_DBG);
 #include "ethernet/gptp/gptp_state.h"
 #include "ethernet/gptp/gptp_data_set.h"
 #include "ethernet/gptp/gptp_private.h"
+#endif
+
+#if defined(CONFIG_NET_L2_PPP)
+#include <net/ppp.h>
+#include "ppp/ppp_internal.h"
 #endif
 
 #include "net_shell.h"
@@ -137,6 +144,16 @@ static const char *iface2str(struct net_if *iface, const char **extra)
 		}
 
 		return "Ethernet";
+	}
+#endif
+
+#ifdef CONFIG_NET_L2_PPP
+	if (net_if_l2(iface) == &NET_L2_GET_NAME(PPP)) {
+		if (extra) {
+			*extra = "===";
+		}
+
+		return "PPP";
 	}
 #endif
 
@@ -676,6 +693,31 @@ static void print_eth_stats(struct net_if *iface, struct net_stats_eth *data,
 }
 #endif /* CONFIG_NET_STATISTICS_ETHERNET && CONFIG_NET_STATISTICS_USER_API */
 
+#if defined(CONFIG_NET_STATISTICS_PPP) && \
+					defined(CONFIG_NET_STATISTICS_USER_API)
+static void print_ppp_stats(struct net_if *iface, struct net_stats_ppp *data,
+			    const struct shell *shell)
+{
+	PR("Bytes received  : %u\n", data->bytes.received);
+	PR("Bytes sent      : %u\n", data->bytes.sent);
+	PR("Frames received : %u\n", data->pkts.rx);
+	PR("Frames sent     : %u\n", data->pkts.tx);
+	PR("Frames dropped  : %u\n", data->drop);
+	PR("Bad FCS         : %u\n", data->chkerr);
+}
+#endif /* CONFIG_NET_STATISTICS_PPP && CONFIG_NET_STATISTICS_USER_API */
+
+static enum net_l2_flags l2_flags_get(struct net_if *iface)
+{
+	enum net_l2_flags flags = 0;
+
+	if (net_if_l2(iface)->get_flags) {
+		flags = net_if_l2(iface)->get_flags(iface);
+	}
+
+	return flags;
+}
+
 static void net_shell_print_statistics(struct net_if *iface, void *user_data)
 {
 	struct net_shell_user_data *data = user_data;
@@ -692,118 +734,122 @@ static void net_shell_print_statistics(struct net_if *iface, void *user_data)
 		PR("=================\n");
 	}
 
+	if (!iface || !(l2_flags_get(iface) & NET_L2_POINT_TO_POINT)) {
 #if defined(CONFIG_NET_STATISTICS_IPV6)
-	PR("IPv6 recv      %d\tsent\t%d\tdrop\t%d\tforwarded\t%d\n",
-	   GET_STAT(iface, ipv6.recv),
-	   GET_STAT(iface, ipv6.sent),
-	   GET_STAT(iface, ipv6.drop),
-	   GET_STAT(iface, ipv6.forwarded));
+		PR("IPv6 recv      %d\tsent\t%d\tdrop\t%d\tforwarded\t%d\n",
+		   GET_STAT(iface, ipv6.recv),
+		   GET_STAT(iface, ipv6.sent),
+		   GET_STAT(iface, ipv6.drop),
+		   GET_STAT(iface, ipv6.forwarded));
 #if defined(CONFIG_NET_STATISTICS_IPV6_ND)
-	PR("IPv6 ND recv   %d\tsent\t%d\tdrop\t%d\n",
-	   GET_STAT(iface, ipv6_nd.recv),
-	   GET_STAT(iface, ipv6_nd.sent),
-	   GET_STAT(iface, ipv6_nd.drop));
+		PR("IPv6 ND recv   %d\tsent\t%d\tdrop\t%d\n",
+		   GET_STAT(iface, ipv6_nd.recv),
+		   GET_STAT(iface, ipv6_nd.sent),
+		   GET_STAT(iface, ipv6_nd.drop));
 #endif /* CONFIG_NET_STATISTICS_IPV6_ND */
 #if defined(CONFIG_NET_STATISTICS_MLD)
-	PR("IPv6 MLD recv  %d\tsent\t%d\tdrop\t%d\n",
-	   GET_STAT(iface, ipv6_mld.recv),
-	   GET_STAT(iface, ipv6_mld.sent),
-	   GET_STAT(iface, ipv6_mld.drop));
+		PR("IPv6 MLD recv  %d\tsent\t%d\tdrop\t%d\n",
+		   GET_STAT(iface, ipv6_mld.recv),
+		   GET_STAT(iface, ipv6_mld.sent),
+		   GET_STAT(iface, ipv6_mld.drop));
 #endif /* CONFIG_NET_STATISTICS_MLD */
 #endif /* CONFIG_NET_STATISTICS_IPV6 */
 
 #if defined(CONFIG_NET_STATISTICS_IPV4)
-	PR("IPv4 recv      %d\tsent\t%d\tdrop\t%d\tforwarded\t%d\n",
-	   GET_STAT(iface, ipv4.recv),
-	   GET_STAT(iface, ipv4.sent),
-	   GET_STAT(iface, ipv4.drop),
-	   GET_STAT(iface, ipv4.forwarded));
+		PR("IPv4 recv      %d\tsent\t%d\tdrop\t%d\tforwarded\t%d\n",
+		   GET_STAT(iface, ipv4.recv),
+		   GET_STAT(iface, ipv4.sent),
+		   GET_STAT(iface, ipv4.drop),
+		   GET_STAT(iface, ipv4.forwarded));
 #endif /* CONFIG_NET_STATISTICS_IPV4 */
 
-	PR("IP vhlerr      %d\thblener\t%d\tlblener\t%d\n",
-	   GET_STAT(iface, ip_errors.vhlerr),
-	   GET_STAT(iface, ip_errors.hblenerr),
-	   GET_STAT(iface, ip_errors.lblenerr));
-	PR("IP fragerr     %d\tchkerr\t%d\tprotoer\t%d\n",
-	   GET_STAT(iface, ip_errors.fragerr),
-	   GET_STAT(iface, ip_errors.chkerr),
-	   GET_STAT(iface, ip_errors.protoerr));
+		PR("IP vhlerr      %d\thblener\t%d\tlblener\t%d\n",
+		   GET_STAT(iface, ip_errors.vhlerr),
+		   GET_STAT(iface, ip_errors.hblenerr),
+		   GET_STAT(iface, ip_errors.lblenerr));
+		PR("IP fragerr     %d\tchkerr\t%d\tprotoer\t%d\n",
+		   GET_STAT(iface, ip_errors.fragerr),
+		   GET_STAT(iface, ip_errors.chkerr),
+		   GET_STAT(iface, ip_errors.protoerr));
 
 #if defined(CONFIG_NET_STATISTICS_ICMP)
-	PR("ICMP recv      %d\tsent\t%d\tdrop\t%d\n",
-	   GET_STAT(iface, icmp.recv),
-	   GET_STAT(iface, icmp.sent),
-	   GET_STAT(iface, icmp.drop));
-	PR("ICMP typeer    %d\tchkerr\t%d\n",
-	   GET_STAT(iface, icmp.typeerr),
-	   GET_STAT(iface, icmp.chkerr));
+		PR("ICMP recv      %d\tsent\t%d\tdrop\t%d\n",
+		   GET_STAT(iface, icmp.recv),
+		   GET_STAT(iface, icmp.sent),
+		   GET_STAT(iface, icmp.drop));
+		PR("ICMP typeer    %d\tchkerr\t%d\n",
+		   GET_STAT(iface, icmp.typeerr),
+		   GET_STAT(iface, icmp.chkerr));
 #endif
 
 #if defined(CONFIG_NET_STATISTICS_UDP)
-	PR("UDP recv       %d\tsent\t%d\tdrop\t%d\n",
-	   GET_STAT(iface, udp.recv),
-	   GET_STAT(iface, udp.sent),
-	   GET_STAT(iface, udp.drop));
-	PR("UDP chkerr     %d\n",
-	   GET_STAT(iface, udp.chkerr));
+		PR("UDP recv       %d\tsent\t%d\tdrop\t%d\n",
+		   GET_STAT(iface, udp.recv),
+		   GET_STAT(iface, udp.sent),
+		   GET_STAT(iface, udp.drop));
+		PR("UDP chkerr     %d\n",
+		   GET_STAT(iface, udp.chkerr));
 #endif
 
 #if defined(CONFIG_NET_STATISTICS_TCP)
-	PR("TCP bytes recv %u\tsent\t%d\n",
-	   GET_STAT(iface, tcp.bytes.received),
-	   GET_STAT(iface, tcp.bytes.sent));
-	PR("TCP seg recv   %d\tsent\t%d\tdrop\t%d\n",
-	   GET_STAT(iface, tcp.recv),
-	   GET_STAT(iface, tcp.sent),
-	   GET_STAT(iface, tcp.drop));
-	PR("TCP seg resent %d\tchkerr\t%d\tackerr\t%d\n",
-	   GET_STAT(iface, tcp.resent),
-	   GET_STAT(iface, tcp.chkerr),
-	   GET_STAT(iface, tcp.ackerr));
-	PR("TCP seg rsterr %d\trst\t%d\tre-xmit\t%d\n",
-	   GET_STAT(iface, tcp.rsterr),
-	   GET_STAT(iface, tcp.rst),
-	   GET_STAT(iface, tcp.rexmit));
-	PR("TCP conn drop  %d\tconnrst\t%d\n",
-	   GET_STAT(iface, tcp.conndrop),
-	   GET_STAT(iface, tcp.connrst));
+		PR("TCP bytes recv %u\tsent\t%d\n",
+		   GET_STAT(iface, tcp.bytes.received),
+		   GET_STAT(iface, tcp.bytes.sent));
+		PR("TCP seg recv   %d\tsent\t%d\tdrop\t%d\n",
+		   GET_STAT(iface, tcp.recv),
+		   GET_STAT(iface, tcp.sent),
+		   GET_STAT(iface, tcp.drop));
+		PR("TCP seg resent %d\tchkerr\t%d\tackerr\t%d\n",
+		   GET_STAT(iface, tcp.resent),
+		   GET_STAT(iface, tcp.chkerr),
+		   GET_STAT(iface, tcp.ackerr));
+		PR("TCP seg rsterr %d\trst\t%d\tre-xmit\t%d\n",
+		   GET_STAT(iface, tcp.rsterr),
+		   GET_STAT(iface, tcp.rst),
+		   GET_STAT(iface, tcp.rexmit));
+		PR("TCP conn drop  %d\tconnrst\t%d\n",
+		   GET_STAT(iface, tcp.conndrop),
+		   GET_STAT(iface, tcp.connrst));
 #endif
 
-	PR("Bytes received %u\n", GET_STAT(iface, bytes.received));
-	PR("Bytes sent     %u\n", GET_STAT(iface, bytes.sent));
-	PR("Processing err %d\n", GET_STAT(iface, processing_error));
+		PR("Bytes received %u\n", GET_STAT(iface, bytes.received));
+		PR("Bytes sent     %u\n", GET_STAT(iface, bytes.sent));
+		PR("Processing err %d\n", GET_STAT(iface, processing_error));
 
 #if NET_TC_COUNT > 1
-	{
-		int i;
+		{
+			int i;
 
 #if NET_TC_TX_COUNT > 1
-		PR("TX traffic class statistics:\n");
-		PR("TC  Priority\tSent pkts\tbytes\n");
+			PR("TX traffic class statistics:\n");
+			PR("TC  Priority\tSent pkts\tbytes\n");
 
-		for (i = 0; i < NET_TC_TX_COUNT; i++) {
-			PR("[%d] %s (%d)\t%d\t\t%d\n", i,
-			   priority2str(GET_STAT(iface, tc.sent[i].priority)),
-			   GET_STAT(iface, tc.sent[i].priority),
-			   GET_STAT(iface, tc.sent[i].pkts),
-			   GET_STAT(iface, tc.sent[i].bytes));
-		}
+			for (i = 0; i < NET_TC_TX_COUNT; i++) {
+				PR("[%d] %s (%d)\t%d\t\t%d\n", i,
+				   priority2str(GET_STAT(iface,
+							 tc.sent[i].priority)),
+				   GET_STAT(iface, tc.sent[i].priority),
+				   GET_STAT(iface, tc.sent[i].pkts),
+				   GET_STAT(iface, tc.sent[i].bytes));
+			}
 #endif
 
 #if NET_TC_RX_COUNT > 1
-		PR("RX traffic class statistics:\n");
-		PR("TC  Priority\tRecv pkts\tbytes\n");
+			PR("RX traffic class statistics:\n");
+			PR("TC  Priority\tRecv pkts\tbytes\n");
 
-		for (i = 0; i < NET_TC_RX_COUNT; i++) {
-			PR("[%d] %s (%d)\t%d\t\t%d\n", i,
-			   priority2str(GET_STAT(iface, tc.recv[i].priority)),
-			   GET_STAT(iface, tc.recv[i].priority),
-			   GET_STAT(iface, tc.recv[i].pkts),
-			   GET_STAT(iface, tc.recv[i].bytes));
+			for (i = 0; i < NET_TC_RX_COUNT; i++) {
+				PR("[%d] %s (%d)\t%d\t\t%d\n", i,
+				   priority2str(GET_STAT(iface,
+							 tc.recv[i].priority)),
+				   GET_STAT(iface, tc.recv[i].priority),
+				   GET_STAT(iface, tc.recv[i].pkts),
+				   GET_STAT(iface, tc.recv[i].bytes));
+			}
 		}
-	}
 #endif
 #endif /* NET_TC_COUNT > 1 */
+	}
 
 #if defined(CONFIG_NET_STATISTICS_ETHERNET) && \
 					defined(CONFIG_NET_STATISTICS_USER_API)
@@ -818,6 +864,21 @@ static void net_shell_print_statistics(struct net_if *iface, void *user_data)
 		}
 	}
 #endif /* CONFIG_NET_STATISTICS_ETHERNET && CONFIG_NET_STATISTICS_USER_API */
+
+#if defined(CONFIG_NET_STATISTICS_PPP) && \
+					defined(CONFIG_NET_STATISTICS_USER_API)
+
+	if (iface && net_if_l2(iface) == &NET_L2_GET_NAME(PPP)) {
+		struct net_stats_ppp ppp_data;
+		int ret;
+
+		ret = net_mgmt(NET_REQUEST_STATS_GET_PPP, iface,
+			       &ppp_data, sizeof(ppp_data));
+		if (!ret) {
+			print_ppp_stats(iface, &ppp_data, shell);
+		}
+	}
+#endif /* CONFIG_NET_STATISTICS_PPP && CONFIG_NET_STATISTICS_USER_API */
 }
 #endif /* CONFIG_NET_STATISTICS */
 
@@ -2982,6 +3043,96 @@ wait_reply:
 #endif
 }
 
+static int cmd_net_ppp_ping(const struct shell *shell, size_t argc,
+			    char *argv[])
+{
+#if defined(CONFIG_NET_PPP)
+	if (argv[1]) {
+		int ret, idx = get_iface_idx(shell, argv[1]);
+
+		if (idx < 0) {
+			return -ENOEXEC;
+		}
+
+		ret = net_ppp_ping(idx, K_SECONDS(1));
+		if (ret < 0) {
+			if (ret == -EAGAIN) {
+				PR_INFO("PPP Echo-Req timeout.\n");
+			} else if (ret == -ENODEV || ret == -ENOENT) {
+				PR_INFO("Not a PPP interface (%d)\n", idx);
+			} else {
+				PR_INFO("PPP Echo-Req failed (%d)\n", ret);
+			}
+		}
+	} else {
+		PR_INFO("PPP network interface must be given.\n");
+		return -ENOEXEC;
+	}
+#else
+	PR_INFO("PPP not enabled. Set CONFIG_NET_L2_PPP to enable it.\n");
+#endif
+	return 0;
+}
+
+static int cmd_net_ppp_status(const struct shell *shell, size_t argc,
+			      char *argv[])
+{
+#if defined(CONFIG_NET_PPP)
+	int idx = 0;
+	struct ppp_context *ctx;
+
+	if (argv[1]) {
+		idx = get_iface_idx(shell, argv[1]);
+		if (idx < 0) {
+			return -ENOEXEC;
+		}
+	}
+
+	ctx = net_ppp_context_get(idx);
+	if (!ctx) {
+		PR_INFO("PPP context not found.\n");
+		return -ENOEXEC;
+	}
+
+	PR("PPP phase           : %s (%d)\n", ppp_phase_str(ctx->phase),
+								ctx->phase);
+	PR("LCP state           : %s (%d)\n",
+	   ppp_state_str(ctx->lcp.fsm.state), ctx->lcp.fsm.state);
+	PR("LCP retransmits     : %u\n", ctx->lcp.fsm.retransmits);
+	PR("LCP NACK loops      : %u\n", ctx->lcp.fsm.nack_loops);
+	PR("LCP NACKs recv      : %u\n", ctx->lcp.fsm.recv_nack_loops);
+	PR("LCP current id      : %d\n", ctx->lcp.fsm.id);
+	PR("LCP ACK received    : %s\n", ctx->lcp.fsm.ack_received ?
+								"yes" : "no");
+
+#if defined(CONFIG_NET_IPV4)
+	PR("IPCP state          : %s (%d)\n",
+	   ppp_state_str(ctx->ipcp.fsm.state), ctx->ipcp.fsm.state);
+	PR("IPCP retransmits    : %u\n", ctx->ipcp.fsm.retransmits);
+	PR("IPCP NACK loops     : %u\n", ctx->ipcp.fsm.nack_loops);
+	PR("IPCP NACKs recv     : %u\n", ctx->ipcp.fsm.recv_nack_loops);
+	PR("IPCP current id     : %d\n", ctx->ipcp.fsm.id);
+	PR("IPCP ACK received   : %s\n", ctx->ipcp.fsm.ack_received ?
+								"yes" : "no");
+#endif /* CONFIG_NET_IPV4 */
+
+#if defined(CONFIG_NET_IPV6)
+	PR("IPv6CP state        : %s (%d)\n",
+	   ppp_state_str(ctx->ipv6cp.fsm.state), ctx->ipv6cp.fsm.state);
+	PR("IPv6CP retransmits  : %u\n", ctx->ipv6cp.fsm.retransmits);
+	PR("IPv6CP NACK loops   : %u\n", ctx->ipv6cp.fsm.nack_loops);
+	PR("IPv6CP NACKs recv   : %u\n", ctx->ipv6cp.fsm.recv_nack_loops);
+	PR("IPv6CP current id   : %d\n", ctx->ipv6cp.fsm.id);
+	PR("IPv6CP ACK received : %s\n", ctx->ipv6cp.fsm.ack_received ?
+								"yes" : "no");
+#endif /* CONFIG_NET_IPV6 */
+
+#else
+	PR_INFO("PPP not enabled. Set CONFIG_NET_L2_PPP to enable it.\n");
+#endif
+	return 0;
+}
+
 static int cmd_net_route(const struct shell *shell, size_t argc, char *argv[])
 {
 #if defined(CONFIG_NET_ROUTE) || defined(CONFIG_NET_ROUTE_MCAST)
@@ -3775,8 +3926,63 @@ static void iface_index_get(size_t idx, struct shell_static_entry *entry)
 }
 
 #define IFACE_DYN_CMD &iface_index
+
+#if defined(CONFIG_NET_PPP)
+static char *set_iface_ppp_index_buffer(size_t idx)
+{
+	struct net_if *iface = net_if_get_by_index(idx);
+
+	if (!iface) {
+		return NULL;
+	}
+
+	if (net_if_l2(iface) != &NET_L2_GET_NAME(PPP)) {
+		return NULL;
+	}
+
+	snprintk(iface_index_buffer[idx], MAX_IFACE_STR_LEN, "%zu", idx);
+
+	return iface_index_buffer[idx];
+}
+
+static char *set_iface_ppp_index_help(size_t idx)
+{
+	struct net_if *iface = net_if_get_by_index(idx);
+
+	if (!iface) {
+		return NULL;
+	}
+
+	if (net_if_l2(iface) != &NET_L2_GET_NAME(PPP)) {
+		return NULL;
+	}
+
+	snprintk(iface_help_buffer[idx], MAX_IFACE_HELP_STR_LEN,
+		 "%s (%p)", iface2str(iface, NULL), iface);
+
+	return iface_help_buffer[idx];
+}
+
+static void iface_ppp_index_get(size_t idx, struct shell_static_entry *entry);
+
+SHELL_DYNAMIC_CMD_CREATE(iface_ppp_index, iface_ppp_index_get);
+
+static void iface_ppp_index_get(size_t idx, struct shell_static_entry *entry)
+{
+	entry->handler = NULL;
+	entry->help  = set_iface_ppp_index_help(idx);
+	entry->subcmd = &iface_ppp_index;
+	entry->syntax = set_iface_ppp_index_buffer(idx);
+}
+
+#define IFACE_PPP_DYN_CMD &iface_ppp_index
+#else
+#define IFACE_PPP_DYN_CMD NULL
+#endif /* CONFIG_NET_PPP */
+
 #else
 #define IFACE_DYN_CMD NULL
+#define IFACE_PPP_DYN_CMD NULL
 #endif /* CONFIG_NET_SHELL_DYN_CMD_COMPLETION */
 
 SHELL_STATIC_SUBCMD_SET_CREATE(net_cmd_iface,
@@ -3791,6 +3997,16 @@ SHELL_STATIC_SUBCMD_SET_CREATE(net_cmd_iface,
 		  "'net iface <index>' shows network interface "
 		  "information.",
 		  cmd_net_iface),
+	SHELL_SUBCMD_SET_END
+);
+
+SHELL_STATIC_SUBCMD_SET_CREATE(net_cmd_ppp,
+	SHELL_CMD(ping, IFACE_PPP_DYN_CMD,
+		  "'net ppp ping <index>' sends Echo-request to PPP interface.",
+		  cmd_net_ppp_ping),
+	SHELL_CMD(status, NULL,
+		  "'net ppp status' prints information about PPP.",
+		  cmd_net_ppp_status),
 	SHELL_SUBCMD_SET_END
 );
 
@@ -3930,6 +4146,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(net_commands,
 	SHELL_CMD(nbr, &net_cmd_nbr, "Print neighbor information.",
 		  cmd_net_nbr),
 	SHELL_CMD(ping, NULL, "'net ping [-c count] [-i interval ms] <host>' ping a network host.", cmd_net_ping),
+	SHELL_CMD(ppp, &net_cmd_ppp, "PPP information.", cmd_net_ppp_status),
 	SHELL_CMD(route, NULL, "Show network route.", cmd_net_route),
 	SHELL_CMD(stacks, NULL, "Show network stacks information.",
 		  cmd_net_stacks),
