@@ -1,0 +1,6 @@
+common:
+    tags: net ppp
+tests:
+  net.ppp:
+    min_ram: 16
+    depends_on: netif
