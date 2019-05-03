@@ -140,13 +140,16 @@ static inline void net_hexdump(const char *str,
 static inline void net_pkt_hexdump(struct net_pkt *pkt, const char *str)
 {
 	struct net_buf *buf = pkt->buffer;
+	char pkt_str[sizeof("0x12345678")];
 
 	if (str && str[0]) {
 		LOG_DBG("%s", str);
 	}
 
+	snprintk(pkt_str, sizeof(pkt_str), "%p", pkt);
+
 	while (buf) {
-		LOG_HEXDUMP_DBG(buf->data, buf->len, "");
+		LOG_HEXDUMP_DBG(buf->data, buf->len, pkt_str);
 		buf = buf->frags;
 	}
 }
