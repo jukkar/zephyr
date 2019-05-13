@@ -11,6 +11,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <logging/log.h>
+LOG_MODULE_REGISTER(uart_pipe, CONFIG_UART_CONSOLE_LOG_LEVEL);
+
 #include <kernel.h>
 
 #include <uart.h>
@@ -39,6 +42,8 @@ static void uart_pipe_rx(struct device *dev)
 			break;
 		}
 
+		LOG_HEXDUMP_DBG(recv_buf + recv_off, got, "RX");
+
 		/*
 		 * Call application callback with received data. Application
 		 * may provide new buffer or alter data offset.
@@ -61,9 +66,14 @@ static void uart_pipe_isr(struct device *dev)
 
 int uart_pipe_send(const u8_t *data, int len)
 {
+	const u8_t *orig_data = data;
+	int orig_len = len;
+
 	while (len--)  {
 		uart_poll_out(uart_pipe_dev, *data++);
 	}
+
+	LOG_HEXDUMP_DBG(orig_data, orig_len, "TX");
 
 	return 0;
 }
