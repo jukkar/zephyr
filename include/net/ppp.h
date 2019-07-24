@@ -30,6 +30,9 @@ extern "C" {
 /** PPP maximum transfer unit (MTU) */
 #define PPP_MTU PPP_MRU
 
+/** PPP over Ethernet MTU, see RFC 2516 for details */
+#define PPPOE_MTU 1492
+
 /** Max length of terminate description string */
 #define PPP_MAX_TERMINATE_REASON_LEN 32
 
@@ -126,6 +129,16 @@ enum ppp_packet_type {
 	PPP_ECHO_REQ       = 9,
 	PPP_ECHO_REPLY     = 10,
 	PPP_DISCARD_REQ    = 11
+};
+
+/**
+ * PPPoE protocol packets from RFC 2516
+ */
+enum pppoe_packet_type {
+	PPPOE_PADI = 0x09,
+	PPPOE_PADO = 0x07,
+	PPPOE_PADR = 0x19,
+	PPPOE_PADS = 0x65,
 };
 
 /**
@@ -625,6 +638,20 @@ static inline struct ppp_context *net_ppp_context_get(int idx)
 	return NULL;
 }
 #endif
+
+#if defined(CONFIG_NET_PPPOE)
+enum net_verdict net_pppoe_recv(struct net_if *iface, struct net_pkt *pkt);
+#else
+enum net_verdict net_pppoe_recv(struct net_if *iface, struct net_pkt *pkt)
+{
+	ARG_UNUSED(iface);
+	ARG_UNUSED(pkt);
+
+	LOG_ERR("PPPoE not enabled");
+
+	return NET_DROP;
+}
+#endif /* CONFIG_NET_PPPOE */
 
 #ifdef __cplusplus
 }

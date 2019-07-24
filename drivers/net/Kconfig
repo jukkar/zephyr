@@ -5,16 +5,21 @@
 # PPP options
 #
 menuconfig NET_PPP
-	bool "Point-to-point (PPP) UART based driver"
+	bool "Point-to-point (PPP) driver support"
 	depends on NET_L2_PPP
-	select UART_PIPE
-	select UART_INTERRUPT_DRIVEN
 
 if NET_PPP
+
+config NET_PPP_UART
+	bool "Enable PPP UART based driver"
+	default y
+	select UART_PIPE
+	select UART_INTERRUPT_DRIVEN
 
 config NET_PPP_DRV_NAME
 	string "PPP Driver name"
 	default "ppp"
+	depends on NET_PPP_UART
 	help
 	  This option sets the driver name
 
@@ -24,6 +29,54 @@ config NET_PPP_UART_PIPE_BUF_LEN
 	help
 	  This options sets the size of the UART pipe buffer where data
 	  is being read to.
+
+config NET_PPPOE
+	bool "Enable PPP over Ethernet"
+	depends on NET_L2_ETHERNET
+	help
+	  Support PPP over Ethernet links. This option will cause ppp
+	  specific network interface to be created. All the packets sent
+	  to it will be directed to real Ethernet network interface.
+
+config NET_PPPOE_SERVICE_NAME
+	string "Service name"
+	default ""
+	depends on NET_PPPOE
+	help
+	  This option sets the PPPoE service name that is set in Discovery
+	  messages. This can be left empty which indicates that any service is
+	  acceptable
+
+config NET_PPPOE_DRV_NAME
+	string "PPPoE Driver name"
+	default "pppoe"
+	depends on NET_PPPOE
+	help
+	  This option sets the PPPoE driver name
+
+config	NET_PPPOE_ETH_DRV_NAME
+	string "Name of the Ethernet device"
+	depends on NET_PPPOE
+	help
+	  This setting binds PPP over this Ethernet device. If this is left
+	  empty, then first Ethernet device is used instead.
+
+config NET_PPPOE_DELAY_STARTUP_MS
+	int "Delay in ms before sending 1st Discovery"
+	default 0
+	depends on NET_PPPOE
+	help
+	  Delay the sending of first PPPoE Discovery packet. This is useful in
+	  debugging. The value is in milliseconds. Value 0 disables the wait.
+
+config NET_PPPOE_MAX_WAIT_IN_DISCOVERY
+	int "Max delay in sec between two Discovery packets"
+	default 60
+	depends on NET_PPPOE
+	help
+	  When we do not receive a PADO packet within a specified amount
+	  of time, we will resend PADI packet and double the waiting
+	  period. This value tells the maximum wait. The value is in seconds.
 
 config NET_PPP_MTU
 	int "PPP MTU"
