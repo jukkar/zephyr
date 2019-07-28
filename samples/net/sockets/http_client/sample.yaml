@@ -1,0 +1,8 @@
+common:
+  tags: net http http_client
+sample:
+  description: HTTP client sample
+  name: http_client
+tests:
+  sample.net.sockets.http_client:
+    harness: net
