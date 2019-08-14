@@ -15,6 +15,7 @@ LOG_MODULE_REGISTER(net_http, CONFIG_NET_HTTP_LOG_LEVEL);
 
 #include <kernel.h>
 #include <string.h>
+#include <strings.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <stdlib.h>
