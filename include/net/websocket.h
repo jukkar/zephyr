@@ -124,7 +124,7 @@ int websocket_send_msg(int ws_sock, const u8_t *payload, size_t payload_len,
  */
 int websocket_recv_msg(int ws_sock, u8_t *buf, size_t buf_len,
 		       bool *masked, u32_t *mask_value, u32_t *message_type,
-		       s32_t timeout);
+		       u64_t *message_len, s32_t timeout);
 
 /**
  */

@@ -18,8 +18,10 @@ LOG_MODULE_REGISTER(net_websocket, CONFIG_NET_WEBSOCKET_LOG_LEVEL);
 #include <errno.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <sys/byteorder.h>
 
 #include <sys/fdtable.h>
+#include <net/net_core.h>
 #include <net/net_ip.h>
 #include <net/socket.h>
 #include <net/http_client.h>
@@ -437,7 +439,7 @@ int websocket_send_msg(int ws_sock, const u8_t *payload, size_t payload_len,
 		       s32_t timeout)
 {
 	struct websocket_context *ctx;
-	u8_t header[14], hdr_len = 2;
+	u8_t header[MAX_HEADER_LEN], hdr_len = 2;
 	u8_t *data_to_send = (u8_t *)payload;
 	int ret;
 
@@ -525,65 +527,34 @@ quit:
 	return ret;
 }
 
-#if 0
-static void websocket_mask_pkt(struct net_pkt *pkt, u32_t masking_value,
-			       u32_t *data_read)
+static void websocket_parse_header(u8_t *buf, size_t buf_len, bool *masked,
+				   u32_t *mask_value, u64_t *message_length,
+				   u32_t *message_type_flag, size_t *header_len)
 {
-	struct net_buf *frag;
-	u16_t pos;
-	int i;
-
-	frag = net_frag_get_pos(pkt,
-				net_pkt_get_len(pkt) - net_pkt_appdatalen(pkt),
-				&pos);
-	if (!frag) {
-		return;
-	}
-
-	NET_ASSERT(net_pkt_appdata(pkt) == frag->data + pos);
-
-	while (frag) {
-		for (i = pos; i < frag->len; i++, (*data_read)++) {
-			frag->data[i] ^=
-				masking_value >> (8 * (3 - (*data_read) % 4));
-		}
-
-		pos = 0;
-		frag = frag->frags;
-	}
-}
-#endif
-
-static int websocket_strip_header(u8_t *buf, size_t buf_len, bool *masked,
-				  u32_t *mask_value, size_t *message_length,
-				  u32_t *message_type_flag, size_t *header_len)
-{
-#if 0
-	size_t read_pos = 0;
-	u16_t value;
-	u8_t len; /* message length byte */
 	u8_t len_len; /* length of the length field in header */
+	u8_t len;     /* message length byte */
+	u16_t value;
 
 	value = sys_get_be16(&buf[0]);
 	if (value & 0x8000) {
-		*message_type_flag |= WS_FLAG_FINAL;
+		*message_type_flag |= WEBSOCKET_FLAG_FINAL;
 	}
 
 	switch (value & 0x0f00) {
 	case 0x0100:
-		*message_type_flag |= WS_FLAG_TEXT;
+		*message_type_flag |= WEBSOCKET_FLAG_TEXT;
 		break;
 	case 0x0200:
-		*message_type_flag |= WS_FLAG_BINARY;
+		*message_type_flag |= WEBSOCKET_FLAG_BINARY;
 		break;
 	case 0x0800:
-		*message_type_flag |= WS_FLAG_CLOSE;
+		*message_type_flag |= WEBSOCKET_FLAG_CLOSE;
 		break;
 	case 0x0900:
-		*message_type_flag |= WS_FLAG_PING;
+		*message_type_flag |= WEBSOCKET_FLAG_PING;
 		break;
 	case 0x0A00:
-		*message_type_flag |= WS_FLAG_PONG;
+		*message_type_flag |= WEBSOCKET_FLAG_PONG;
 		break;
 	}
 
@@ -592,57 +563,32 @@ static int websocket_strip_header(u8_t *buf, size_t buf_len, bool *masked,
 		len_len = 0;
 		*message_length = len;
 	} else if (len == 126) {
-		u16_t msg_len;
-
 		len_len = 2;
-
-		frag = net_frag_read_be16(frag, pos, &pos, &msg_len);
-		if (!frag && pos == 0xffff) {
-			return -ENOMSG;
-		}
-
-		*message_length = msg_len;
+		*message_length = sys_get_be16(&buf[2]);
 	} else {
-		len_len = 4;
-
-		frag = net_frag_read_be32(frag, pos, &pos, message_length);
-		if (!frag && pos == 0xffff) {
-			return -ENOMSG;
-		}
+		len_len = 8;
+		*message_length = sys_get_be64(&buf[2]);
 	}
 
 	if (value & 0x0080) {
 		*masked = true;
-		appdata_pos = 0;
-
-		frag = net_frag_read_be32(frag, pos, &pos, mask_value);
-		if (!frag && pos == 0xffff) {
-			return -ENOMSG;
-		}
+		*mask_value = sys_get_be32(&buf[2 + len_len]);
 	} else {
 		*masked = false;
-		appdata_pos = len_len;
-	}
-
-	frag = net_frag_get_pos(pkt, pos + appdata_pos, &pos);
-	if (!frag && pos == 0xffff) {
-		return -ENOMSG;
 	}
 
 	/* Minimum websocket header is 6 bytes, header length might be
 	 * bigger depending on length field len.
 	 */
 	*header_len = 6 + len_len;
-#endif
-	return 0;
 }
 
 int websocket_recv_msg(int ws_sock, u8_t *buf, size_t buf_len,
 		       bool *masked, u32_t *mask_value, u32_t *message_type,
-		       s32_t timeout)
+		       u64_t *message_len, s32_t timeout)
 {
 	struct websocket_context *ctx;
-	size_t message_length, header_len;
+	size_t header_len, pos_to_write = 0;
 	u32_t message_type_flag;
 	int ret;
 
@@ -655,20 +601,71 @@ int websocket_recv_msg(int ws_sock, u8_t *buf, size_t buf_len,
 		return -ENOENT;
 	}
 
-	ret = recv(ctx->real_sock, buf, buf_len,
+	if (!ctx->header_received) {
+		ret = recv(ctx->real_sock, &ctx->header[ctx->pos],
+			   sizeof(ctx->header) - ctx->pos,
+			   timeout == K_NO_WAIT ? MSG_DONTWAIT : 0);
+		if (ret < 0) {
+			return ret;
+		}
+
+		if (ret < sizeof(ctx->header)) {
+			ctx->pos += ret;
+			return -EAGAIN;
+		}
+
+		/* All the header is now received, we can read the data next */
+		ctx->header_received = true;
+
+		websocket_parse_header(ctx->header, ret, masked, mask_value,
+				       message_len, &message_type_flag,
+				       &header_len);
+
+		/* If there is any data in the header, then move it to the
+		 * data buffer.
+		 */
+		if (header_len < sizeof(ctx->header)) {
+			NET_ASSERT(ctx->pos <= sizeof(ctx->header));
+
+			memcpy(buf, &ctx->header[header_len],
+			       sizeof(ctx->header) - ctx->pos);
+			pos_to_write = sizeof(ctx->header) - ctx->pos;
+		}
+
+		ctx->message_len = *message_len;
+	}
+
+	ret = recv(ctx->real_sock, &buf[pos_to_write],
+		   buf_len - pos_to_write,
 		   timeout == K_NO_WAIT ? MSG_DONTWAIT : 0);
 	if (ret < 0) {
 		return ret;
 	}
 
-	ret = websocket_strip_header(buf, buf_len, masked, mask_value,
-				     &message_length, &message_type_flag,
-				     &header_len);
-	if (ret < 0) {
-		return ret;
+	ret += pos_to_write;
+
+	/* Unmask the data */
+	websocket_mask_payload(buf, ret, *mask_value);
+
+	ctx->total_read += ret;
+
+	/* If we receive the end of the message and there is still data left,
+	 * store the remaining to header and tmp buffer.
+	 */
+	if (ctx->total_read >= ctx->message_len) {
+		ret -= ctx->total_read - ctx->message_len;
+
+		if (ret > 0) {
+			/* Rest of the stuff is suppose to go to header temp
+			 * buffer and to user specified temp buf
+			 */
+
+		} else {
+			ctx->header_received = false;
+		}
 	}
 
-	return 0;
+	return ret;
 }
 
 static int websocket_send(struct websocket_context *ctx, const u8_t *buf,
@@ -688,11 +685,13 @@ static int websocket_recv(struct websocket_context *ctx, u8_t *buf,
 	bool masked;
 	u32_t mask_value;
 	u32_t message_type;
+	u64_t message_len;
 
 	NET_DBG("[%p] Waiting data, buf len %zd bytes", ctx, buf_len);
 
 	return websocket_recv_msg(ctx->sock, buf, buf_len, &masked,
-				  &mask_value, &message_type, timeout);
+				  &mask_value, &message_type, &message_len,
+				  timeout);
 }
 
 static ssize_t websocket_read_vmeth(void *obj, void *buffer, size_t count)

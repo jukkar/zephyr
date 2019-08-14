@@ -12,6 +12,9 @@
 
 #define WS_SHA1_OUTPUT_LEN 20
 
+/* Max Websocket header length */
+#define MAX_HEADER_LEN 14
+
 /* From RFC 6455 chapter 4.2.2 */
 #define WS_MAGIC "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
@@ -52,7 +55,7 @@ struct websocket_context {
 	};
 
 	/** Temporary buffers used for HTTP handshakes and Websocket protocol
-	 * headers.
+	 * headers. User must provide the buffer pointer.
 	 */
 	u8_t *tmp_buf;
 
@@ -71,6 +74,21 @@ struct websocket_context {
 	 */
 	s32_t timeout;
 
+	/** Internal buffer for Websocket header when reading data. Shared
+	 * with the amount of data received.
+	 */
+	union {
+		struct {
+			u8_t header[MAX_HEADER_LEN];
+			u8_t pos;
+		};
+
+		struct {
+			u64_t total_read;
+			u64_t message_len;
+		};
+	};
+
 	/** Did we receive Sec-WebSocket-Accept: field */
 	u8_t sec_accept_present:1;
 
@@ -79,6 +97,9 @@ struct websocket_context {
 
 	/** Did we receive all from peer during HTTP handshake */
 	u8_t all_received:1;
+
+	/** Header received */
+	u8_t header_received:1;
 };
 
 #if 0
