@@ -52,6 +52,8 @@ struct net_eth_addr {
 #define NET_ETH_PTYPE_IP		0x0800
 #define NET_ETH_PTYPE_IPV6		0x86dd
 #define NET_ETH_PTYPE_VLAN		0x8100
+#define NET_ETH_PTYPE_PPP_DISCOVERY	0x8863
+#define NET_ETH_PTYPE_PPP_SESSION	0x8864
 #define NET_ETH_PTYPE_PTP		0x88f7
 #define NET_ETH_PTYPE_LLDP		0x88cc
 #define NET_ETH_PTYPE_ALL               0x0003 /* from linux/if_ether.h */

@@ -140,6 +140,10 @@ struct net_pkt {
 				   * a GPTP packet.
 				   * Used only if defined (CONFIG_NET_GPTP)
 				   */
+		u8_t pppoe_discovery: 1; /* For outgoing packet: is this
+					  * a PPPoE Discovery packet or not.
+					  * Used only if CONFIG_NET_PPPOE.
+					  */
 	};
 
 	u8_t forwarding : 1;	/* Are we forwarding this pkt
@@ -868,6 +872,17 @@ static inline void net_pkt_set_ppp(struct net_pkt *pkt,
 {
 	pkt->ppp_msg = is_ppp_msg;
 }
+
+static inline bool net_pkt_is_pppoe_discovery(struct net_pkt *pkt)
+{
+	return pkt->pppoe_discovery == true;
+}
+
+static inline void net_pkt_set_pppoe_discovery_type(struct net_pkt *pkt,
+						    bool is_pppoe_discovery)
+{
+	pkt->pppoe_discovery = is_pppoe_discovery;
+}
 #else /* CONFIG_NET_PPP */
 static inline bool net_pkt_is_ppp(struct net_pkt *pkt)
 {
@@ -881,6 +896,20 @@ static inline void net_pkt_set_ppp(struct net_pkt *pkt,
 {
 	ARG_UNUSED(pkt);
 	ARG_UNUSED(is_ppp_msg);
+}
+
+static inline bool net_pkt_is_pppoe_discovery(struct net_pkt *pkt)
+{
+	ARG_UNUSED(pkt);
+
+	return false;
+}
+
+static inline void net_pkt_set_pppoe_discovery_type(struct net_pkt *pkt,
+						    bool is_pppoe_discovery)
+{
+	ARG_UNUSED(pkt);
+	ARG_UNUSED(is_pppoe_discovery);
 }
 #endif /* CONFIG_NET_PPP */
 

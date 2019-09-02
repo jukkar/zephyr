@@ -2,4 +2,5 @@
 
 zephyr_sources_ifdef(CONFIG_SLIP slip.c)
 zephyr_sources_ifdef(CONFIG_NET_LOOPBACK loopback.c)
-zephyr_sources_ifdef(CONFIG_NET_PPP ppp.c)
+zephyr_sources_ifdef(CONFIG_NET_PPP_UART ppp.c)
+zephyr_sources_ifdef(CONFIG_NET_PPPOE pppoe.c)

@@ -19,6 +19,10 @@ LOG_MODULE_REGISTER(net_ethernet, CONFIG_NET_L2_ETHERNET_LOG_LEVEL);
 #include <net/lldp.h>
 #endif
 
+#if defined(CONFIG_NET_PPPOE)
+#include <net/ppp.h>
+#endif
+
 #include <syscall_handler.h>
 #if defined(CONFIG_NET_L2_CANBUS_ETH_TRANSLATOR)
 #include <net/can.h>
@@ -210,6 +214,14 @@ static enum net_verdict ethernet_recv(struct net_if *iface,
 #else
 		NET_DBG("LLDP Rx agent not enabled");
 		goto drop;
+#endif
+#if defined(CONFIG_NET_PPPOE)
+	case NET_ETH_PTYPE_PPP_DISCOVERY:
+		net_pkt_set_pppoe_discovery_type(pkt, true);
+		/* fallthrough */
+	case NET_ETH_PTYPE_PPP_SESSION:
+		net_buf_pull(pkt->frags, hdr_len);
+		return net_pppoe_recv(iface, pkt);
 #endif
 	default:
 		NET_DBG("Unknown hdr type 0x%04x iface %p", type, iface);
@@ -598,6 +610,12 @@ static int ethernet_send(struct net_if *iface, struct net_pkt *pkt)
 		ptype = htons(NET_ETH_PTYPE_PTP);
 	} else if (IS_ENABLED(CONFIG_NET_LLDP) && net_pkt_is_lldp(pkt)) {
 		ptype = htons(NET_ETH_PTYPE_LLDP);
+	} else if (IS_ENABLED(CONFIG_NET_PPPOE) && net_pkt_is_ppp(pkt)) {
+		if (net_pkt_is_pppoe_discovery(pkt)) {
+			ptype = htons(NET_ETH_PTYPE_PPP_DISCOVERY);
+		} else {
+			ptype = htons(NET_ETH_PTYPE_PPP_SESSION);
+		}
 	} else if (IS_ENABLED(CONFIG_NET_ARP)) {
 		/* Unktown type: Unqueued pkt is an ARP reply.
 		 */
