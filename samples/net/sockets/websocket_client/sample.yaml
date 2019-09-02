@@ -1,0 +1,8 @@
+common:
+  tags: net http websocket_client
+sample:
+  description: Websocket client sample
+  name: websocket_client
+tests:
+  sample.net.sockets.websocket_client:
+    harness: net
