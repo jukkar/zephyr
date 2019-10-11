@@ -1074,7 +1074,7 @@ static void conn_handler_cb(struct net_conn *conn, void *user_data)
 }
 #endif /* CONFIG_NET_CONN_LOG_LEVEL >= LOG_LEVEL_DBG */
 
-#if defined(CONFIG_NET_TCP) && \
+#if defined(CONFIG_NET_TCP1) && \
 	(defined(CONFIG_NET_OFFLOAD) || defined(CONFIG_NET_NATIVE))
 static void tcp_cb(struct net_tcp *tcp, void *user_data)
 {
@@ -1383,7 +1383,7 @@ static int cmd_net_conn(const struct shell *shell, size_t argc, char *argv[])
 	}
 #endif
 
-#if defined(CONFIG_NET_TCP)
+#if defined(CONFIG_NET_TCP1)
 	PR("\nTCP        Context   Src port Dst port   "
 	   "Send-Seq   Send-Ack  MSS    State\n");
 
@@ -3426,7 +3426,7 @@ static int cmd_net_stats(const struct shell *shell, size_t argc, char *argv[])
 	return 0;
 }
 
-#if defined(CONFIG_NET_NATIVE_TCP)
+#if defined(CONFIG_NET_TCP1) && defined(CONFIG_NET_NATIVE_TCP)
 static struct net_context *tcp_ctx;
 static const struct shell *tcp_shell;
 
@@ -3629,7 +3629,7 @@ static void tcp_sent_cb(struct net_context *context,
 static int cmd_net_tcp_connect(const struct shell *shell, size_t argc,
 			       char *argv[])
 {
-#if defined(CONFIG_NET_NATIVE_TCP)
+#if defined(CONFIG_NET_TCP1) && defined(CONFIG_NET_NATIVE_TCP)
 	int arg = 0;
 
 	/* tcp connect <ip> port */
@@ -3663,7 +3663,7 @@ static int cmd_net_tcp_connect(const struct shell *shell, size_t argc,
 
 	tcp_connect(shell, ip, port, &tcp_ctx);
 #else
-	PR_INFO("Native TCP not enabled. Set CONFIG_NET_TCP and "
+	PR_INFO("Legacy TCP not enabled. Set CONFIG_NET_TCP1 and "
 		"CONFIG_NET_NATIVE to enable TCP support.\n");
 #endif /* CONFIG_NET_NATIVE_TCP */
 
@@ -3673,7 +3673,7 @@ static int cmd_net_tcp_connect(const struct shell *shell, size_t argc,
 static int cmd_net_tcp_send(const struct shell *shell, size_t argc,
 			    char *argv[])
 {
-#if defined(CONFIG_NET_NATIVE_TCP)
+#if defined(CONFIG_NET_TCP1) && defined(CONFIG_NET_NATIVE_TCP)
 	int arg = 0;
 	int ret;
 	struct net_shell_user_data user_data;
@@ -3700,7 +3700,7 @@ static int cmd_net_tcp_send(const struct shell *shell, size_t argc,
 	}
 
 #else
-	PR_INFO("Native TCP not enabled. Set CONFIG_NET_TCP and "
+	PR_INFO("Legacy TCP not enabled. Set CONFIG_NET_TCP1 and "
 		"CONFIG_NET_NATIVE to enable TCP support.\n");
 #endif /* CONFIG_NET_NATIVE_TCP */
 
@@ -3710,7 +3710,7 @@ static int cmd_net_tcp_send(const struct shell *shell, size_t argc,
 static int cmd_net_tcp_close(const struct shell *shell, size_t argc,
 			     char *argv[])
 {
-#if defined(CONFIG_NET_NATIVE_TCP)
+#if defined(CONFIG_NET_TCP1) && defined(CONFIG_NET_NATIVE_TCP)
 	int ret;
 
 	/* tcp close */
@@ -3728,7 +3728,7 @@ static int cmd_net_tcp_close(const struct shell *shell, size_t argc,
 	PR("Connection closed.\n");
 	tcp_ctx = NULL;
 #else
-	PR_INFO("Native TCP not enabled. Set CONFIG_NET_TCP and "
+	PR_INFO("Legacy TCP not enabled. Set CONFIG_NET_TCP1 and "
 		"CONFIG_NET_NATIVE to enable TCP support.\n");
 #endif /* CONFIG_NET_TCP */
 
