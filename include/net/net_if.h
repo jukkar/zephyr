@@ -194,6 +194,12 @@ enum net_if_flag {
 	 */
 	NET_IF_NO_AUTO_START,
 
+	/** Interface supports packet capture if this is set */
+	NET_IF_PCAP_SUPPORTED,
+
+	/** Interface is capturing packets if this is set */
+	NET_IF_PCAP_ENABLED,
+
 /** @cond INTERNAL_HIDDEN */
 	/* Total number of flags - must be at the end of the enum */
 	NET_IF_NUM_FLAGS

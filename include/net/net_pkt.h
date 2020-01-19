@@ -147,6 +147,7 @@ struct net_pkt {
 				 * packet before EOF
 				 * Used only if defined(CONFIG_NET_TCP)
 				 */
+
 	union {
 		u8_t pkt_queued: 1; /* For outgoing packet: is this packet
 				     * queued to be sent but has not reached
@@ -179,6 +180,13 @@ struct net_pkt {
 					     */
 		u8_t ppp_msg           : 1; /* This is a PPP message */
 	};
+
+#if defined(CONFIG_NET_RPCAP)
+	u8_t pcap_pkt   : 1; /* Is this already captured packet. If it is, then
+			      * it is not re-captured when we are sending
+			      * it to capture server.
+			      */
+#endif
 
 	union {
 		/* IPv6 hop limit or IPv4 ttl for this network packet.
@@ -944,6 +952,31 @@ static inline void net_pkt_set_ppp(struct net_pkt *pkt,
 	ARG_UNUSED(is_ppp_msg);
 }
 #endif /* CONFIG_NET_PPP */
+
+#if defined(CONFIG_NET_RPCAP)
+static inline u8_t net_pkt_pcap(struct net_pkt *pkt)
+{
+	return pkt->pcap_pkt;
+}
+
+static inline void net_pkt_set_pcap(struct net_pkt *pkt, bool is_pcap)
+{
+	pkt->pcap_pkt = is_pcap;
+}
+#else /* CONFIG_NET_RPCAP */
+static inline u8_t net_pkt_pcap(struct net_pkt *pkt)
+{
+	ARG_UNUSED(pkt);
+
+	return 0;
+}
+
+static inline void net_pkt_set_pcap(struct net_pkt *pkt, bool is_pcap)
+{
+	ARG_UNUSED(pkt);
+	ARG_UNUSED(is_pcap);
+}
+#endif /* CONFIG_NET_RPCAP */
 
 #define NET_IPV6_HDR(pkt) ((struct net_ipv6_hdr *)net_pkt_ip_data(pkt))
 #define NET_IPV4_HDR(pkt) ((struct net_ipv4_hdr *)net_pkt_ip_data(pkt))

@@ -1,0 +1,23 @@
+# Options for packet capturing
+
+# Copyright (c) 2020 Intel Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig NET_RPCAP
+	bool "Enable remote packet capturing (RPCAP) support [EXPERIMENTAL]"
+	select NET_TCP
+	help
+	  This setting enables the rpcap support at built time,
+	  it is still necessary to start capturing the packets at runtime.
+	  This can be done by enabling RPCAPD functionality running in Zephyr
+	  and RPCAP client like dumpcap running in remote host.
+
+if NET_RPCAP
+
+module = NET_RPCAP
+module-dep = NET_LOG
+module-str = Log level for PCAP library
+module-help = Enables net PCAP library to output debug messages.
+source "subsys/net/Kconfig.template.log_config.net"
+
+endif # NET_RPCAP
