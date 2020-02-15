@@ -20,4 +20,6 @@ module-str = Log level for PCAP library
 module-help = Enables net PCAP library to output debug messages.
 source "subsys/net/Kconfig.template.log_config.net"
 
+source "subsys/net/lib/rpcap/Kconfig.rpcapd"
+
 endif # NET_RPCAP

@@ -1,0 +1,138 @@
+# Options for packet capturing
+
+# Copyright (c) 2020 Intel Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig NET_RPCAPD
+	bool "Enable RPCAP daemon [EXPERIMENTAL]"
+	select NET_SOCKETS
+	help
+	  If this option is set, then the remote PCAP server (rpcapd)
+	  functionality is enabled. This daemon support is provided as a simple
+	  way to capture network traffic from one network interface.
+	  If you need to capture from more than one network interface, you
+	  need to create your own rpcapd implementation.
+
+if NET_RPCAPD
+
+choice
+	prompt "RPCAP daemon mode"
+	default NET_RPCAPD_MODE_PASSIVE
+	help
+	  Passive or active mode. In passive mode, Zephyr starts to wait
+	  connection from RPCAP client. In active mode, Zephyr will connect
+	  itself to RPCAP client.
+
+config NET_RPCAPD_MODE_PASSIVE
+	bool "Passive"
+	help
+	  Wait connection attempt from RPCAP client.
+
+config NET_RPCAPD_MODE_ACTIVE
+	bool "Active"
+	help
+	  Connect to RPCAP client.
+
+endchoice
+
+config NET_RPCAPD_LISTENING_PORT
+	int "Listening TCP port number"
+	default 2002
+	range 1 65535
+	depends on NET_RPCAPD_MODE_PASSIVE
+	help
+	  Default port for listening connections is 2002.
+
+config NET_RPCAPD_CONNECTION_FROM
+	string "Allow connection from this host"
+	default ""
+	depends on NET_RPCAPD_MODE_PASSIVE
+	help
+	  If left empty, then allow connection from any host.
+	  Set here IPv4 or IPv6 address to restrict access from
+	  certain host.
+
+config NET_RPCAPD_ENABLE_LLMNR_RESPONDER
+	bool "Allow client to find us using hostname"
+	default y
+	depends on NET_RPCAPD_MODE_PASSIVE
+	select NET_HOSTNAME_ENABLE
+	select LLMNR_RESPONDER
+	help
+	  Allow client node to connect Zephyr using a name instead
+	  of IP address. The system will enable LLMNR support for this.
+	  Note that you must set the hostname of this device.
+
+config NET_RPCAPD_CONNECTING_PORT
+	int "Connecting TCP port number"
+	default 2003
+	range 1 65535
+	depends on NET_RPCAPD_MODE_ACTIVE
+	help
+	  Default port for connecting to peer is 2003.
+
+config NET_RPCAPD_REMOTE_HOST
+	string "Host where to send the captured packets"
+	default ""
+	depends on NET_RPCAPD_MODE_ACTIVE
+	help
+	  The host should be running rpcapd daemon which will receive
+	  the packets and can store them. Default port is 2002 if user
+	  has not specified any. The host must be in numeric form, hostname
+	  is not resolved via DNS.
+	  Following syntax is supported:
+	  192.0.2.1
+	  192.0.2.1:2002
+	  2001:db8::1
+	  [2001:db8::1]:2002
+
+config NET_RPCAPD_HANDLER_STACK_SIZE
+	int "Handler thread stack size"
+	default 1024
+	help
+	  Size of the handler thread stack.
+
+config NET_RPCAPD_RX
+	bool "Enable RX capturing"
+	default y
+
+config NET_RPCAPD_TX
+	bool "Enable TX capturing"
+	default y
+
+config NET_RPCAPD_PKT_RX_COUNT
+	int "How many packet receives can be pending at the same time"
+	default NET_PKT_RX_COUNT
+	help
+	  Each RX buffer will occupy smallish amount of memory.
+	  See include/net/net_pkt.h and the sizeof(struct net_pkt)
+
+config NET_RPCAPD_PKT_TX_COUNT
+	int "How many packet sends can be pending at the same time"
+	default NET_PKT_TX_COUNT
+	help
+	  Each TX buffer will occupy smallish amount of memory.
+	  See include/net/net_pkt.h and the sizeof(struct net_pkt)
+
+config NET_RPCAPD_BUF_RX_COUNT
+	int "How many network buffers are allocated for receiving data"
+	default NET_BUF_RX_COUNT
+	help
+	  Each data buffer will occupy CONFIG_NET_BUF_DATA_SIZE + smallish
+	  header (sizeof(struct net_buf)) amount of data.
+
+config NET_RPCAPD_BUF_TX_COUNT
+	int "How many network buffers are allocated for sending data"
+	default NET_BUF_TX_COUNT
+	help
+	  Each data buffer will occupy CONFIG_NET_BUF_DATA_SIZE + smallish
+	  header (sizeof(struct net_buf)) amount of data.
+
+config NET_RPCAPD_BUF_DATA_SIZE
+	int "Size of each network data fragment"
+	default NET_BUF_DATA_SIZE
+	help
+	  This value tells what is the fixed size of each network buffer.
+	  Normally you should not change this.
+
+endif # NET_RPCAPD
