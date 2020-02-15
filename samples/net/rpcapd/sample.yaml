@@ -1,0 +1,9 @@
+common:
+  harness: net
+  tags: net pcap rpcap
+sample:
+  description: Sample for capturing network packets
+  name: rpcap daemon
+tests:
+  sample.net.rpcapd:
+    depends_on: netif
