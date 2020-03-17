@@ -1,0 +1,5 @@
+tests:
+  drivers.uart.mux:
+    tags: drivers uart mux gsm
+    filter: CONFIG_UART_MUX
+    harness: keyboard
