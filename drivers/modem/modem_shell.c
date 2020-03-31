@@ -17,6 +17,7 @@
 #include <string.h>
 #include <device.h>
 #include <shell/shell.h>
+#include <drivers/console/uart_mux.h>
 
 #include <sys/printk.h>
 
@@ -127,7 +128,67 @@ static int cmd_modem_send(const struct shell *shell, size_t argc,
 	return 0;
 }
 
+#if defined(CONFIG_GSM_MUX)
+static void uart_mux_cb(struct device *uart, struct device *dev,
+			int dlci_address, void *user_data)
+{
+	const char *ch = "?";
+
+	if (dlci_address == CONFIG_GSM_MUX_DLCI_AT) {
+		ch = "AT";
+	} else if (dlci_address == CONFIG_GSM_MUX_DLCI_PPP) {
+		ch = "PPP";
+	} else if (dlci_address == 0) {
+		ch = "control";
+	}
+
+	shell_fprintf(user_data, SHELL_NORMAL,
+		      "%s\t\t%s\t\t%d (%s)\n",
+		      uart->config->name, dev->config->name, dlci_address, ch);
+}
+#endif
+
+static int cmd_modem_info(const struct shell *shell, size_t argc, char *argv[])
+{
+	struct ms_context *mdm_ctx;
+	char *endptr;
+	int i, arg = 1;
+
+	/* info */
+	if (!argv[arg]) {
+		shell_fprintf(shell, SHELL_ERROR,
+			      "Please enter a modem index\n");
+		return -EINVAL;
+	}
+
+	/* <index> of modem receiver */
+	i = (int)strtol(argv[arg], &endptr, 10);
+	if (*endptr != '\0') {
+		shell_fprintf(shell, SHELL_ERROR,
+			      "Please enter a modem index\n");
+		return -EINVAL;
+	}
+
+	mdm_ctx = ms_context_from_id(i);
+	if (!mdm_ctx) {
+		shell_fprintf(shell, SHELL_ERROR, "Modem receiver not found!");
+		return 0;
+	}
+
+	shell_fprintf(shell, SHELL_NORMAL,
+		      "GSM 07.10 muxing : %s\n",
+		      IS_ENABLED(CONFIG_GSM_MUX) ? "enabled" : "disabled");
+
+#if defined(CONFIG_GSM_MUX)
+	shell_fprintf(shell, SHELL_NORMAL, "Real UART\tMUX UART\tDLCI\n");
+	uart_mux_foreach(uart_mux_cb, shell);
+#endif
+
+	return 0;
+}
+
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_modem,
+	SHELL_CMD(info, NULL, "Show information for a modem", cmd_modem_info),
 	SHELL_CMD(list, NULL, "List registered modems", cmd_modem_list),
 	SHELL_CMD(send, NULL, "Send an AT <command> to a registered modem "
 			      "receiver", cmd_modem_send),
