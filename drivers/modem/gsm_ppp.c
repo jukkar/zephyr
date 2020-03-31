@@ -456,9 +456,8 @@ static void mux_setup(struct k_work *work)
 
 	case STATE_DONE:
 		/* Re-use the original iface for AT channel */
-		ret = modem_iface_uart_init(&gsm->context.iface,
-					    &gsm->gsm_data,
-					    gsm->at_dev->config->name);
+		ret = modem_iface_uart_init_dev(&gsm->context.iface,
+						gsm->at_dev->config->name);
 		if (ret < 0) {
 			LOG_DBG("iface %suart error %d", "mux ", ret);
 			gsm->mux_enabled = false;
