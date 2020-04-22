@@ -155,6 +155,7 @@ struct tcp { /* TCP connection */
 	union tcp_endpoint src;
 	union tcp_endpoint dst;
 	u16_t win;
+	u16_t mss;
 	struct tcp_options recv_options;
 	struct k_delayed_work send_timer;
 	sys_slist_t send_queue;
@@ -180,3 +181,14 @@ struct tcp { /* TCP connection */
 
 #define FL(_fl, _op, _mask, _args...)					\
 	_flags(_fl, _op, _mask, strlen("" #_args) ? _args : true)
+
+/*
+ * @brief Generate initial TCP sequence number
+ *
+ * @return Return a random TCP sequence number
+ */
+static inline u32_t tcp_init_isn(void)
+{
+	/* Randomise initial seq number */
+	return sys_rand32_get();
+}
