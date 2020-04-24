@@ -33,10 +33,9 @@
 #endif
 
 #if IS_ENABLED(CONFIG_NET_TEST_PROTOCOL)
-#define tcp_pkt_alloc(_conn, _len)					\
+#define tcp_pkt_alloc(_iface, _family, _len)				\
 ({									\
-	sa_family_t _family = net_context_get_family((_conn)->context);	\
-	struct net_pkt *_pkt = net_pkt_alloc_with_buffer((_conn)->iface,\
+	struct net_pkt *_pkt = net_pkt_alloc_with_buffer((_iface),	\
 							 (_len),	\
 							 _family,	\
 							 IPPROTO_TCP,	\
@@ -49,9 +48,8 @@
 #define tcp_pkt_clone(_pkt) tp_pkt_clone(_pkt, tp_basename(__FILE__), __LINE__)
 #define tcp_pkt_unref(_pkt) tp_pkt_unref(_pkt, tp_basename(__FILE__), __LINE__)
 #else
-#define tcp_pkt_alloc(_conn, _len)					\
-	net_pkt_alloc_with_buffer((_conn)->iface, (_len),		\
-				  net_context_get_family((_conn)->context), \
+#define tcp_pkt_alloc(_iface, _family, _len)				\
+	net_pkt_alloc_with_buffer((_iface), (_len), (_family),		\
 				  IPPROTO_TCP, K_NO_WAIT)
 
 #define tcp_pkt_clone(_pkt) net_pkt_clone(_pkt, K_NO_WAIT)
@@ -181,6 +179,22 @@ struct tcp { /* TCP connection */
 
 #define FL(_fl, _op, _mask, _args...)					\
 	_flags(_fl, _op, _mask, strlen("" #_args) ? _args : true)
+
+/* RFC 1122 4.2.2.6 "If an MSS option is not received at connection
+ * setup, TCP MUST assume a default send MSS of 536"
+ */
+#define NET_TCP_DEFAULT_MSS   536
+
+struct tcp_backlog_entry {
+	sys_snode_t node;
+	struct tcp *conn;
+	struct net_if *iface;
+	u32_t send_seq;
+	u32_t send_ack;
+	struct k_delayed_work ack_timer;
+	struct sockaddr remote;
+	u16_t send_mss;
+};
 
 /*
  * @brief Generate initial TCP sequence number
