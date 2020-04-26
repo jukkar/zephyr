@@ -43,9 +43,9 @@ extern struct net_if_dev __net_if_dev_start[];
 extern struct net_if_dev __net_if_dev_end[];
 
 #if defined(CONFIG_NET_NATIVE_IPV4) || defined(CONFIG_NET_NATIVE_IPV6)
-static struct net_if_router routers[CONFIG_NET_MAX_ROUTERS];
+static NET_BMEM struct net_if_router routers[CONFIG_NET_MAX_ROUTERS];
 static struct k_delayed_work router_timer;
-static sys_slist_t active_router_timers;
+static NET_BMEM sys_slist_t active_router_timers;
 #endif
 
 #if defined(CONFIG_NET_NATIVE_IPV6)
@@ -53,33 +53,33 @@ static sys_slist_t active_router_timers;
 static struct k_delayed_work address_lifetime_timer;
 
 /* Track currently active address lifetime timers */
-static sys_slist_t active_address_lifetime_timers;
+static NET_BMEM sys_slist_t active_address_lifetime_timers;
 
 /* Timer that triggers IPv6 prefix lifetime */
 static struct k_delayed_work prefix_lifetime_timer;
 
 /* Track currently active IPv6 prefix lifetime timers */
-static sys_slist_t active_prefix_lifetime_timers;
+static NET_BMEM sys_slist_t active_prefix_lifetime_timers;
 
 #if defined(CONFIG_NET_IPV6_DAD)
 /** Duplicate address detection (DAD) timer */
 static struct k_delayed_work dad_timer;
-static sys_slist_t active_dad_timers;
+static NET_BMEM sys_slist_t active_dad_timers;
 #endif
 
 #if defined(CONFIG_NET_IPV6_ND)
 static struct k_delayed_work rs_timer;
-static sys_slist_t active_rs_timers;
+static NET_BMEM sys_slist_t active_rs_timers;
 #endif
 
-static struct {
+static NET_BMEM struct {
 	struct net_if_ipv6 ipv6;
 	struct net_if *iface;
 } ipv6_addresses[CONFIG_NET_IF_MAX_IPV6_COUNT];
 #endif /* CONFIG_NET_IPV6 */
 
 #if defined(CONFIG_NET_NATIVE_IPV4)
-static struct {
+static NET_BMEM struct {
 	struct net_if_ipv4 ipv4;
 	struct net_if *iface;
 } ipv4_addresses[CONFIG_NET_IF_MAX_IPV4_COUNT];
@@ -87,12 +87,12 @@ static struct {
 
 /* We keep track of the link callbacks in this list.
  */
-static sys_slist_t link_callbacks;
+static NET_BMEM sys_slist_t link_callbacks;
 
 #if defined(CONFIG_NET_NATIVE_IPV6)
 /* Multicast join/leave tracking.
  */
-static sys_slist_t mcast_monitor_callbacks;
+static NET_BMEM sys_slist_t mcast_monitor_callbacks;
 #endif
 
 #if defined(CONFIG_NET_PKT_TIMESTAMP_THREAD)
@@ -2517,9 +2517,6 @@ static void iface_ipv6_init(int if_count)
 	iface_ipv6_dad_init();
 	iface_ipv6_nd_init();
 
-	k_delayed_work_init(&address_lifetime_timer, address_lifetime_timeout);
-	k_delayed_work_init(&prefix_lifetime_timer, prefix_lifetime_timeout);
-
 	if (if_count > ARRAY_SIZE(ipv6_addresses)) {
 		NET_WARN("You have %lu IPv6 net_if addresses but %d "
 			 "network interfaces", ARRAY_SIZE(ipv6_addresses),
@@ -3778,6 +3775,22 @@ void net_if_add_tx_timestamp(struct net_pkt *pkt)
 }
 #endif /* CONFIG_NET_PKT_TIMESTAMP_THREAD */
 
+void net_if_device_init(void)
+{
+	struct net_if *iface;
+	int if_count;
+
+	for (iface = __net_if_start, if_count = 0; iface != __net_if_end;
+	     iface++, if_count++) {
+		init_iface(iface);
+	}
+
+#if defined(CONFIG_NET_NATIVE_IPV6)
+	k_delayed_work_init(&address_lifetime_timer, address_lifetime_timeout);
+	k_delayed_work_init(&prefix_lifetime_timer, prefix_lifetime_timeout);
+#endif
+}
+
 void net_if_init(void)
 {
 	struct net_if *iface;
@@ -3787,9 +3800,16 @@ void net_if_init(void)
 
 	net_tc_tx_init();
 
-	for (iface = __net_if_start, if_count = 0; iface != __net_if_end;
-	     iface++, if_count++) {
-		init_iface(iface);
+	/* For usermode networking, the interface device init is done
+	 * already in kernel mode.
+	 */
+	if (IS_ENABLED(CONFIG_NET_USER_MODE)) {
+		for (iface = __net_if_start, if_count = 0; iface != __net_if_end;
+		     iface++, if_count++) {
+			;
+		}
+	} else {
+		net_if_device_init();
 	}
 
 	if (iface == __net_if_start) {
@@ -3841,3 +3861,56 @@ void net_if_post_init(void)
 		}
 	}
 }
+
+#if defined(CONFIG_NET_USER_MODE)
+static void net_if_access_grant(struct k_thread *thread)
+{
+	struct net_if *iface;
+
+	for (iface = __net_if_start; iface != __net_if_end; iface++) {
+		k_thread_access_grant(thread, iface, iface->if_dev);
+	}
+
+	k_thread_access_grant(thread, &link_callbacks);
+
+#if defined(CONFIG_NET_NATIVE_IPV4) || defined(CONFIG_NET_NATIVE_IPV6)
+	k_thread_access_grant(thread, &router_timer);
+#endif
+
+#if defined(CONFIG_NET_NATIVE_IPV6)
+	k_thread_access_grant(thread, &address_lifetime_timer,
+			      &prefix_lifetime_timer);
+
+#if defined(CONFIG_NET_IPV6_DAD)
+	k_thread_access_grant(thread, &dad_timer);
+#endif
+#if defined(CONFIG_NET_IPV6_ND)
+	k_thread_access_grant(thread, &rs_timer);
+#endif
+#endif /* CONFIG_NET_IPV6 */
+
+#if defined(CONFIG_ENTROPY_DEVICE_RANDOM_GENERATOR)
+	k_thread_access_grant(thread,
+		      device_get_binding(DT_CHOSEN_ZEPHYR_ENTROPY_LABEL));
+#endif
+}
+
+void net_if_access_grant_tx(struct k_thread *thread)
+{
+	if (IS_ENABLED(CONFIG_THREAD_NAME)) {
+		const char *name = k_thread_name_get(thread);
+
+		NET_DBG("Granting access to thread %p (%s)", thread,
+			name ? log_strdup(name) : "?");
+	} else {
+		NET_DBG("Granting access to thread %p", thread);
+	}
+
+	net_if_access_grant(thread);
+}
+
+void net_if_access_grant_rx(struct k_thread *thread)
+{
+	net_if_access_grant(thread);
+}
+#endif

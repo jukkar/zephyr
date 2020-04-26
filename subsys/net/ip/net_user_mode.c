@@ -69,6 +69,7 @@ void net_access_grant_rx(struct k_thread *thread)
 
 	net_pkt_access_grant_rx(thread);
 	net_tc_access_grant_rx(thread);
+	net_if_access_grant_rx(thread);
 }
 
 void net_access_grant_tx(struct k_thread *thread)
@@ -77,6 +78,7 @@ void net_access_grant_tx(struct k_thread *thread)
 
 	net_pkt_access_grant_tx(thread);
 	net_tc_access_grant_tx(thread);
+	net_if_access_grant_tx(thread);
 }
 
 void net_access_grant_app(struct k_thread *thread)
@@ -85,6 +87,7 @@ void net_access_grant_app(struct k_thread *thread)
 
 	net_pkt_access_grant_tx(thread);
 	net_tc_access_grant_tx(thread);
+	net_if_access_grant_tx(thread);
 }
 
 static void net_user_mode_handler(void)
@@ -95,6 +98,8 @@ static void net_user_mode_handler(void)
 int net_user_mode_init(void)
 {
 	net_mem_domain_init();
+
+	net_if_device_init();
 
 	(void)k_thread_create(&net_user_mode_thread,
 			      net_user_mode_stack,
