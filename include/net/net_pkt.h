@@ -1382,6 +1382,7 @@ struct net_pkt *net_pkt_rx_alloc_with_buffer_debug(struct net_if *iface,
 					   _proto, _timeout,		\
 					   __func__, __LINE__)
 #endif /* NET_PKT_DEBUG_ENABLED */
+
 /** @endcond */
 
 /**
