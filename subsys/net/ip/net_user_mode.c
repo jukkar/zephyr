@@ -70,6 +70,7 @@ void net_access_grant_rx(struct k_thread *thread)
 	net_pkt_access_grant_rx(thread);
 	net_tc_access_grant_rx(thread);
 	net_if_access_grant_rx(thread);
+	net_context_access_grant(thread);
 }
 
 void net_access_grant_tx(struct k_thread *thread)
@@ -79,6 +80,7 @@ void net_access_grant_tx(struct k_thread *thread)
 	net_pkt_access_grant_tx(thread);
 	net_tc_access_grant_tx(thread);
 	net_if_access_grant_tx(thread);
+	net_context_access_grant(thread);
 }
 
 void net_access_grant_app(struct k_thread *thread)
@@ -88,6 +90,7 @@ void net_access_grant_app(struct k_thread *thread)
 	net_pkt_access_grant_tx(thread);
 	net_tc_access_grant_tx(thread);
 	net_if_access_grant_tx(thread);
+	net_context_access_grant(thread);
 }
 
 static void net_user_mode_handler(void)
