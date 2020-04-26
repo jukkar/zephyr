@@ -38,11 +38,24 @@ static K_SEM_DEFINE(net_mgmt_lock, 1, 1);
 
 K_THREAD_STACK_DEFINE(mgmt_stack, CONFIG_NET_MGMT_EVENT_STACK_SIZE);
 static struct k_thread mgmt_thread_data;
-static struct mgmt_event_entry events[CONFIG_NET_MGMT_EVENT_QUEUE_SIZE];
-static uint32_t global_event_mask;
-static sys_slist_t event_callbacks;
-static int16_t in_event;
-static int16_t out_event;
+static NET_BMEM struct mgmt_event_entry
+				events[CONFIG_NET_MGMT_EVENT_QUEUE_SIZE];
+static NET_BMEM uint32_t global_event_mask;
+static NET_BMEM sys_slist_t event_callbacks;
+static NET_BMEM int16_t in_event;
+static NET_BMEM int16_t out_event;
+
+#if defined(CONFIG_NET_USER_MODE)
+static void net_mgmt_grant_access(struct k_thread *thread)
+{
+	net_mem_domain_add_thread(thread);
+
+	k_thread_access_grant(thread, &net_mgmt_lock);
+	k_thread_access_grant(thread, &network_event);
+}
+#else
+#define net_mgmt_grant_access(thread)
+#endif
 
 static inline void mgmt_push_event(uint32_t mgmt_event, struct net_if *iface,
 				   void *info, size_t length)
@@ -272,6 +285,15 @@ static int mgmt_event_wait_call(struct net_if *iface,
 	};
 	int ret;
 
+	/* If we are in user mode, then the net_mgmt thread cannot access
+	 * the sync semaphore data and the k_sem_take() call later in this
+	 * function will fail. Basically this means that we cannot use the
+	 * synchronous API in user mode.
+	 */
+	if (IS_ENABLED(CONFIG_NET_USER_MODE)) {
+		return -EACCES;
+	}
+
 	if (iface) {
 		sync_data.iface = iface;
 	}
@@ -389,11 +411,14 @@ void net_mgmt_event_init(void)
 	k_thread_create(&mgmt_thread_data, mgmt_stack,
 			K_THREAD_STACK_SIZEOF(mgmt_stack),
 			(k_thread_entry_t)mgmt_thread, NULL, NULL, NULL,
-			K_PRIO_COOP(CONFIG_NET_MGMT_EVENT_THREAD_PRIO), 0,
-			K_NO_WAIT);
+			K_PRIO_COOP(CONFIG_NET_MGMT_EVENT_THREAD_PRIO),
+			NET_THREAD_FLAGS, K_FOREVER);
 	k_thread_name_set(&mgmt_thread_data, "net_mgmt");
+	net_mgmt_grant_access(&mgmt_thread_data);
+	k_thread_start(&mgmt_thread_data);
 
-	NET_DBG("Net MGMT initialized: queue of %u entries, stack size of %u",
+	NET_DBG("Net %sMGMT initialized: queue of %u entries, stack size of %u",
+		IS_ENABLED(CONFIG_NET_USER_MODE) ? "user mode " : "",
 		CONFIG_NET_MGMT_EVENT_QUEUE_SIZE,
 		CONFIG_NET_MGMT_EVENT_STACK_SIZE);
 }
