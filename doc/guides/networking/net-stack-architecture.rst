@@ -156,3 +156,10 @@ one :ref:`thread <threads_v2>` to another.
 These :ref:`threads <threads_v2>` might run in different contexts
 (:ref:`kernel <kernel_api>` vs. :ref:`userspace <usermode_api>`) and with different
 :ref:`priorities <scheduling_v2>`.
+
+
+Network packet processing statistics
+************************************
+
+See information about network processing statistics
+:ref:`here <net_pkt_processing_stats>`.
