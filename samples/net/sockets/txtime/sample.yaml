@@ -1,0 +1,7 @@
+sample:
+  description: Socket SO_TXTIME sample
+  name: txtime-socket
+  harness: tsn
+tests:
+  sample.net.sockets.txtime:
+    tags: net sockets txtime tsn
