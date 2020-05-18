@@ -160,6 +160,7 @@ static int create_socket(struct net_if *iface, struct sockaddr *peer)
 	struct sockaddr local;
 	socklen_t addrlen;
 	bool optval;
+	uint8_t priority;
 	int sock;
 	int ret;
 
@@ -222,6 +223,14 @@ static int create_socket(struct net_if *iface, struct sockaddr *peer)
 	ret = setsockopt(sock, SOL_SOCKET, SO_TXTIME, &optval, sizeof(optval));
 	if (ret < 0) {
 		LOG_ERR("Cannot set SO_TXTIME (%d)", -errno);
+		return -errno;
+	}
+
+	priority = NET_PRIORITY_CA;
+	ret = setsockopt(sock, SOL_SOCKET, SO_PRIORITY, &priority,
+			 sizeof(priority));
+	if (ret < 0) {
+		LOG_ERR("Cannot set SO_PRIORITY (%d)", -errno);
 		return -errno;
 	}
 
