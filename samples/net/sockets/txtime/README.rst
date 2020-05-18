@@ -23,7 +23,10 @@ Building and Running
 
 When the application is run, it start to send UDP packets. You can start
 ``echo-server`` application from `net-tools`_ project to catch these and
-send the data back to this application.
+send the data back to this application. Optionally you can set
+:config:`CONFIG_NET_SAMPLE_PACKET_SOCKET` option, which makes the application
+to create an AF_PACKET type socket. In this case, the ``echo-server``
+application cannot be used as a peer.
 
 This sample can be built and executed on qemu_x86 board as
 described in :ref:`networking_with_host`.

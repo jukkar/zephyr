@@ -10,13 +10,36 @@ config NET_SAMPLE_PEER
 	help
 	  The value depends on your network setup. This could be
 	  a multicast address if needed. If port is not specified,
-	  then 4242 is used.
+	  then 4242 is used. Currently the port value is only used
+	  when selecting UDP socket type.
 	  Syntax of the IP address string:
 	     192.0.2.1:80
 	     192.0.2.42
 	     [2001:db8::1]:8080
 	     [2001:db8::2]
 	     2001:db::42
+
+choice
+	prompt "Socket type to use"
+	help
+	  Can be used to select whether the application will use UDP
+	  socket to send data, or if it uses AF_PACKET (raw) socket.
+
+config NET_SAMPLE_UDP_SOCKET
+	bool "UDP socket"
+	help
+	  Use UDP socket.
+
+config NET_SAMPLE_PACKET_SOCKET
+	bool "Packet socket"
+	select NET_SOCKETS_PACKET
+	help
+	  Use AF_PACKET socket. Note that currently the application sends
+	  dummy data that is not a valid Ethernet frame. We want to measure
+	  how long it takes to send data so the actual data content is not
+	  important for this sample application.
+
+endchoice
 
 config NET_SAMPLE_PACKET_INTERVAL
 	int "How long to wait between sent packets (in milliseconds)"
