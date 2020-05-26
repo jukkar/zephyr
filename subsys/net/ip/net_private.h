@@ -38,6 +38,7 @@
 
 #include "connection.h"
 
+extern int net_init_rest(void);
 extern void net_if_init(void);
 extern void net_if_post_init(void);
 extern void net_if_carrier_down(struct net_if *iface);

@@ -34,6 +34,7 @@ LOG_MODULE_REGISTER(net_core, CONFIG_NET_CORE_LOG_LEVEL);
 #endif
 
 #include "net_private.h"
+#include "net_user_mode_private.h"
 #include "net_shell.h"
 
 #include "icmpv6.h"
@@ -156,8 +157,13 @@ static void init_rx_queues(void)
 {
 	/* Starting TX side. The ordering is important here and the TX
 	 * can only be started when RX side is ready to receive packets.
+	 *
+	 * In usermode networking, the network interfaces are already
+	 * initialized so can be skipped here.
 	 */
-	net_if_init();
+	if (!IS_ENABLED(CONFIG_NET_USER_MODE)) {
+		net_if_init();
+	}
 
 	net_tc_rx_init();
 
@@ -446,7 +452,7 @@ static inline int services_init(void)
 	return status;
 }
 
-static int net_init(struct device *unused)
+int net_init_rest(void)
 {
 	net_hostname_init();
 
@@ -463,6 +469,19 @@ static int net_init(struct device *unused)
 	init_rx_queues();
 
 	return services_init();
+}
+
+static int net_init(struct device *unused)
+{
+	NET_DBG("%s networking in %s mode",
+		IS_ENABLED(CONFIG_NET_NATIVE) ? "Native" : "Offloading",
+		IS_ENABLED(CONFIG_NET_USER_MODE) ? "user" : "kernel");
+
+	if (IS_ENABLED(CONFIG_NET_USER_MODE)) {
+		return net_user_mode_init();
+	}
+
+	return net_init_rest();
 }
 
 SYS_INIT(net_init, POST_KERNEL, CONFIG_NET_INIT_PRIO);

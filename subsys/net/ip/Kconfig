@@ -49,6 +49,65 @@ module-help = Enables offload layer to output debug messages.
 source "subsys/net/Kconfig.template.log_config.net"
 endif # NET_OFFLOAD
 
+config NET_USER_MODE
+	bool "User mode networking stack"
+	depends on NET_NATIVE && USERSPACE
+	help
+	  Run the networking stack in user mode instead of kernel mode.
+	  This will isolate network functionality from kernel and will
+	  improve overall safety of the system. Note that enabling this
+	  will slow the performance of the networking subsystem.
+
+config NET_USER_MODE_STACK_SIZE
+	int "Stack size of user mode handler thread"
+	default 1024
+	depends on NET_USER_MODE
+	help
+	  Size of the stack that handles user mode networking.
+
+config NET_USER_MODE_PRIO
+	int "Priority of the network user mode handler thread"
+	default 7
+	depends on NET_USER_MODE
+	help
+	  The thread is a cooperative thread using this priority.
+
+config NET_USER_MODE_MAX_RX_MSG
+	int "Max number of RX msgs from net device driver to user mode handler"
+	default NET_PKT_RX_COUNT
+	depends on NET_USER_MODE
+	help
+	  The data between network device driver and network user mode handler
+	  is passed via a k_msgq. This tells how many messages there are at a
+	  given time between network device driver and net user mode handler.
+
+config NET_USER_MODE_MAX_TX_MSG
+	int "Max number of TX msgs from application to user mode handler"
+	default NET_PKT_TX_COUNT
+	depends on NET_USER_MODE
+	help
+	  The data between application and network user mode handler is passed
+	  via a k_msgq. This tells how many messages there are at a given time
+	  between application and net user mode handler.
+
+config NET_USER_MODE_MAX_DATA_SIZE
+	int "Max size of the data to be sent or received"
+	default 1500 if NET_L2_ETHERNET
+	default 1280 if NET_IPV6
+	default 1024
+	depends on NET_USER_MODE
+	help
+	  Maximum number of bytes we can send or receive in one go.
+	  This depends on MTU of the network bearer.
+
+if NET_USER_MODE
+module = NET_USER_MODE
+module-dep = NET_LOG
+module-str = Log level for user mode networking
+module-help = Enables user mode networking to output debug messages.
+source "subsys/net/Kconfig.template.log_config.net"
+endif # NET_USER_MODE
+
 config NET_RAW_MODE
 	bool
 	help

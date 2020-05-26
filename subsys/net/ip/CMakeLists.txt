@@ -42,6 +42,7 @@ zephyr_library_sources_ifdef(CONFIG_NET_SOCKETS_PACKET  connection.c
 zephyr_library_sources_ifdef(CONFIG_NET_SOCKETS_CAN  connection.c
                                                      canbus_socket.c)
 zephyr_library_sources_ifdef(CONFIG_NET_PROMISCUOUS_MODE promiscuous.c)
+zephyr_library_sources_ifdef(CONFIG_NET_USER_MODE net_user_mode.c)
 endif()
 
 zephyr_library_include_directories(

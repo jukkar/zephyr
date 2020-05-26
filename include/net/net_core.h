@@ -21,6 +21,7 @@
 #include <kernel.h>
 
 #include <net/net_timeout.h>
+#include <net/net_user_mode.h>
 
 #ifdef __cplusplus
 extern "C" {
