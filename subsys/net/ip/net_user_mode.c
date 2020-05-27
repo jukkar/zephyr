@@ -65,23 +65,69 @@ static void net_mem_domain_init(void)
 
 void net_access_grant_rx(struct k_thread *thread)
 {
+	const char *name = k_thread_name_get(thread);
+
+	if (!name) {
+		name = "?";
+	}
+
+	NET_DBG("Thread %s (%p) added to net_domain for %s",
+		log_strdup(name), thread, "RX");
+
 	net_mem_domain_add_thread(thread);
 
+	NET_DBG("Adding %s access to %s (%p)", "net_pkt", log_strdup(name),
+		thread);
 	net_pkt_access_grant_rx(thread);
+
+	NET_DBG("Adding %s access to %s (%p)", "net_tc", log_strdup(name),
+		thread);
 	net_tc_access_grant_rx(thread);
+
+	NET_DBG("Adding %s access to %s (%p)", "net_if", log_strdup(name),
+		thread);
 	net_if_access_grant_rx(thread);
+
+	NET_DBG("Adding %s access to %s (%p)", "net_context", log_strdup(name),
+		thread);
 	net_context_access_grant(thread);
+
+	NET_DBG("Adding %s access to %s (%p)", "net_ipv6", log_strdup(name),
+		thread);
 	net_ipv6_access_grant(thread);
 }
 
 void net_access_grant_tx(struct k_thread *thread)
 {
+	const char *name = k_thread_name_get(thread);
+
+	if (!name) {
+		name = "?";
+	}
+
+	NET_DBG("Thread %s (%p) added to net_domain for %s",
+		log_strdup(name), thread, "TX");
+
 	net_mem_domain_add_thread(thread);
 
+	NET_DBG("Adding %s access to %s (%p)", "net_pkt", log_strdup(name),
+		thread);
 	net_pkt_access_grant_tx(thread);
+
+	NET_DBG("Adding %s access to %s (%p)", "net_tc", log_strdup(name),
+		thread);
 	net_tc_access_grant_tx(thread);
+
+	NET_DBG("Adding %s access to %s (%p)", "net_if", log_strdup(name),
+		thread);
 	net_if_access_grant_tx(thread);
+
+	NET_DBG("Adding %s access to %s (%p)", "net_context", log_strdup(name),
+		thread);
 	net_context_access_grant(thread);
+
+	NET_DBG("Adding %s access to %s (%p)", "net_ipv6", log_strdup(name),
+		thread);
 	net_ipv6_access_grant(thread);
 }
 
