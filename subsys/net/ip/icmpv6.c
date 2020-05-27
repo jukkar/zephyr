@@ -24,7 +24,7 @@ LOG_MODULE_REGISTER(net_icmpv6, CONFIG_NET_ICMPV6_LOG_LEVEL);
 
 #define PKT_WAIT_TIME K_SECONDS(1)
 
-static sys_slist_t handlers;
+static NET_BMEM sys_slist_t handlers;
 
 const char *net_icmpv6_type2str(int icmpv6_type)
 {
@@ -398,7 +398,7 @@ drop:
 	return NET_DROP;
 }
 
-static struct net_icmpv6_handler echo_request_handler = {
+static NET_DMEM struct net_icmpv6_handler echo_request_handler = {
 	.type = NET_ICMPV6_ECHO_REQUEST,
 	.code = 0,
 	.handler = icmpv6_handle_echo_request,
