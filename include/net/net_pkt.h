@@ -1002,6 +1002,14 @@ static inline bool net_pkt_is_being_overwritten(struct net_pkt *pkt)
 	return pkt->overwrite;
 }
 
+#define NET_PKT_SLAB(name, slab_block_size, slab_num_blocks, slab_align) \
+	static NET_BMEM char __aligned(WB_UP(slab_align))		\
+		_k_mem_slab_buf_##name[(slab_num_blocks) *		\
+				       WB_UP(slab_block_size)];		\
+	static Z_STRUCT_SECTION_ITERABLE(k_mem_slab, name) =		\
+		Z_MEM_SLAB_INITIALIZER(name, _k_mem_slab_buf_##name,	\
+				       WB_UP(slab_block_size), slab_num_blocks)
+
 /* @endcond */
 
 /**
@@ -1018,7 +1026,7 @@ static inline bool net_pkt_is_being_overwritten(struct net_pkt *pkt)
  * @param count Number of net_pkt in this slab.
  */
 #define NET_PKT_SLAB_DEFINE(name, count)				\
-	K_MEM_SLAB_DEFINE(name, sizeof(struct net_pkt), count, 4)
+	NET_PKT_SLAB(name, sizeof(struct net_pkt), count, sizeof(uintptr_t))
 
 /* Backward compatibility macro */
 #define NET_PKT_TX_SLAB_DEFINE(name, count) NET_PKT_SLAB_DEFINE(name, count)

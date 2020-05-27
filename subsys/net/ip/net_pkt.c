@@ -109,8 +109,8 @@ LOG_MODULE_REGISTER(net_pkt, CONFIG_NET_PKT_LOG_LEVEL);
 #error "Minimum value for CONFIG_NET_BUF_TX_COUNT is 1"
 #endif
 
-K_MEM_SLAB_DEFINE(rx_pkts, sizeof(struct net_pkt), CONFIG_NET_PKT_RX_COUNT, 4);
-K_MEM_SLAB_DEFINE(tx_pkts, sizeof(struct net_pkt), CONFIG_NET_PKT_TX_COUNT, 4);
+NET_PKT_SLAB_DEFINE(rx_pkts, CONFIG_NET_PKT_RX_COUNT);
+NET_PKT_SLAB_DEFINE(tx_pkts, CONFIG_NET_PKT_TX_COUNT);
 
 #if defined(CONFIG_NET_BUF_FIXED_DATA_SIZE)
 
