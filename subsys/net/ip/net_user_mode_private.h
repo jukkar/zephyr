@@ -52,6 +52,7 @@ void net_if_access_grant_tx(struct k_thread *thread);
 void net_if_access_grant_rx(struct k_thread *thread);
 void net_context_access_grant(struct k_thread *thread);
 void net_ipv6_access_grant(struct k_thread *thread);
+void net_tc_user_mode_init(struct k_thread *user_mode_thread);
 #else
 static inline int net_user_mode_init(void)
 {

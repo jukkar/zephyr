@@ -163,8 +163,11 @@ int net_user_mode_init(void)
 	k_thread_name_set(&net_user_mode_thread, "net_user_mode");
 	k_thread_resource_pool_assign(&net_user_mode_thread,
 				      &net_user_mode_mem_pool);
+
 	net_access_grant_tx(&net_user_mode_thread);
 	net_access_grant_rx(&net_user_mode_thread);
+
+	net_tc_user_mode_init(&net_user_mode_thread);
 
 	k_thread_start(&net_user_mode_thread);
 

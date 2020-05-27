@@ -17,6 +17,7 @@ LOG_MODULE_REGISTER(net_tc, CONFIG_NET_TC_LOG_LEVEL);
 #include "net_private.h"
 #include "net_stats.h"
 #include "net_tc_mapping.h"
+#include "net_user_mode_private.h"
 
 /* Stacks for TX work queue */
 K_THREAD_STACK_ARRAY_DEFINE(tx_stack, NET_TC_TX_COUNT,
@@ -291,8 +292,6 @@ void net_tc_tx_init(void)
 
 		snprintk(name, sizeof(name), "tx_workq[%d]", i);
 		k_thread_name_set(&tx_classes[i].work_q.thread, name);
-
-		net_mem_domain_add_thread(&tx_classes[i].work_q.thread);
 	}
 }
 
@@ -324,7 +323,36 @@ void net_tc_rx_init(void)
 
 		snprintk(name, sizeof(name), "rx_workq[%d]", i);
 		k_thread_name_set(&rx_classes[i].work_q.thread, name);
-
-		net_mem_domain_add_thread(&rx_classes[i].work_q.thread);
 	}
 }
+
+#if defined(CONFIG_NET_USER_MODE)
+void net_tc_user_mode_init(struct k_thread *user_mode_thread)
+{
+	int i;
+
+	for (i = 0; i < NET_TC_RX_COUNT; i++) {
+		k_thread_name_set(&rx_classes[i].work_q.thread, "rx_workq");
+
+		net_access_grant_rx(&rx_classes[i].work_q.thread);
+		net_mem_domain_add_thread(&rx_classes[i].work_q.thread);
+		k_thread_access_grant(user_mode_thread,
+				      &rx_classes[i].work_q.thread);
+		k_thread_access_grant(user_mode_thread, rx_stack[i]);
+		k_thread_access_grant(user_mode_thread,
+				      &rx_classes[i].work_q.queue);
+	}
+
+	for (i = 0; i < NET_TC_TX_COUNT; i++) {
+		k_thread_name_set(&tx_classes[i].work_q.thread, "tx_workq");
+
+		net_access_grant_tx(&tx_classes[i].work_q.thread);
+		net_mem_domain_add_thread(&tx_classes[i].work_q.thread);
+		k_thread_access_grant(user_mode_thread,
+				      &tx_classes[i].work_q.thread);
+		k_thread_access_grant(user_mode_thread, tx_stack[i]);
+		k_thread_access_grant(user_mode_thread,
+				      &tx_classes[i].work_q.queue);
+	}
+}
+#endif
