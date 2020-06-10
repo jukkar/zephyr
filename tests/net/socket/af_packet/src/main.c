@@ -77,12 +77,12 @@ ETH_NET_DEVICE_INIT(eth_fake2, "eth_fake2", eth_fake_init,
 		    CONFIG_ETH_INIT_PRIORITY, &eth_fake_api_funcs,
 		    NET_ETH_MTU);
 
-static int setup_socket(struct net_if *iface)
+static int setup_socket(struct net_if *iface, int type, int proto)
 {
 	int sock;
 
-	sock = socket(AF_PACKET, SOCK_RAW, ETH_P_ALL);
-	zassert_true(sock >= 0, "Cannot create packet socket (%d)", sock);
+	sock = socket(AF_PACKET, type, htons(proto));
+	zassert_true(sock >= 0, "Cannot create packet socket (%d)", -errno);
 
 	return sock;
 }
@@ -130,10 +130,33 @@ static void test_packet_sockets(void)
 	zassert_not_null(ud.first, "1st Ethernet interface not found");
 	zassert_not_null(ud.second, "2nd Ethernet interface not found");
 
-	sock1 = setup_socket(ud.first);
+	sock1 = setup_socket(ud.first, SOCK_RAW, ETH_P_ALL);
 	zassert_true(sock1 >= 0, "Cannot create 1st socket (%d)", sock1);
 
-	sock2 = setup_socket(ud.second);
+	sock2 = setup_socket(ud.second, SOCK_RAW, ETH_P_ALL);
+	zassert_true(sock2 >= 0, "Cannot create 2nd socket (%d)", sock2);
+
+	ret = bind_socket(sock1, ud.first);
+	zassert_equal(ret, 0, "Cannot bind 1st socket (%d)", -errno);
+
+	ret = bind_socket(sock2, ud.second);
+	zassert_equal(ret, 0, "Cannot bind 2nd socket (%d)", -errno);
+}
+
+static void test_packet_sockets_dgram(void)
+{
+	struct user_data ud = { 0 };
+	int ret, sock1, sock2;
+
+	net_if_foreach(iface_cb, &ud);
+
+	zassert_not_null(ud.first, "1st Ethernet interface not found");
+	zassert_not_null(ud.second, "2nd Ethernet interface not found");
+
+	sock1 = setup_socket(ud.first, SOCK_DGRAM, ETH_P_TSN);
+	zassert_true(sock1 >= 0, "Cannot create 1st socket (%d)", sock1);
+
+	sock2 = setup_socket(ud.second, SOCK_DGRAM, ETH_P_TSN);
 	zassert_true(sock2 >= 0, "Cannot create 2nd socket (%d)", sock2);
 
 	ret = bind_socket(sock1, ud.first);
@@ -146,6 +169,7 @@ static void test_packet_sockets(void)
 void test_main(void)
 {
 	ztest_test_suite(socket_packet,
-			 ztest_unit_test(test_packet_sockets));
+			 ztest_unit_test(test_packet_sockets),
+			 ztest_unit_test(test_packet_sockets_dgram));
 	ztest_run_test_suite(socket_packet);
 }
