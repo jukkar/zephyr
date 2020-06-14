@@ -175,7 +175,7 @@ ssize_t eth_write_data(int fd, void *buf, size_t buf_len)
 	return write(fd, buf, buf_len);
 }
 
-#if defined(CONFIG_NET_GPTP)
+#if defined(CONFIG_ETH_NATIVE_POSIX_PTP_CLOCK)
 int eth_clock_gettime(struct net_ptp_time *time)
 {
 	struct timespec tp;
@@ -191,7 +191,7 @@ int eth_clock_gettime(struct net_ptp_time *time)
 
 	return 0;
 }
-#endif /* CONFIG_NET_GPTP */
+#endif /* CONFIG_ETH_NATIVE_POSIX_PTP_CLOCK */
 
 #if defined(CONFIG_NET_PROMISCUOUS_MODE)
 int eth_promisc_mode(const char *if_name, bool enable)

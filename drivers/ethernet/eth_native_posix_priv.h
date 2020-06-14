@@ -35,7 +35,8 @@ ssize_t eth_write_data(int fd, void *buf, size_t buf_len);
 int eth_if_up(const char *if_name);
 int eth_if_down(const char *if_name);
 
-#if defined(CONFIG_NET_GPTP)
+#if defined(CONFIG_ETH_NATIVE_POSIX_PTP_CLOCK)
+#include <ptp_clock.h>
 int eth_clock_gettime(struct net_ptp_time *time);
 #endif
 
