@@ -337,6 +337,10 @@ static inline void init_iface(struct net_if *iface)
 
 	NET_DBG("On iface %p", iface);
 
+#ifdef CONFIG_USERSPACE
+	z_object_init(iface);
+#endif
+
 	api->init(iface);
 }
 
