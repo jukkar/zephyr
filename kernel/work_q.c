@@ -46,12 +46,22 @@ static void work_timeout(struct _timeout *t)
 	k_work_submit_to_queue(w->work_q, &w->work);
 }
 
-void k_delayed_work_init(struct k_delayed_work *work, k_work_handler_t handler)
+void z_impl_k_delayed_work_init(struct k_delayed_work *work,
+				k_work_handler_t handler)
 {
 	k_work_init(&work->work, handler);
 	z_init_timeout(&work->timeout);
 	work->work_q = NULL;
 }
+
+#ifdef CONFIG_USERSPACE
+static inline void z_vrfy_k_delayed_work_init(struct k_delayed_work *work,
+					      k_work_handler_t handler)
+{
+	z_impl_k_delayed_work_init(work, handler);
+}
+#include <syscalls/k_delayed_work_init_mrsh.c>
+#endif
 
 static int work_cancel(struct k_delayed_work *work)
 {
@@ -80,9 +90,9 @@ static int work_cancel(struct k_delayed_work *work)
 	return 0;
 }
 
-int k_delayed_work_submit_to_queue(struct k_work_q *work_q,
-				   struct k_delayed_work *work,
-				   k_timeout_t delay)
+int z_impl_k_delayed_work_submit_to_queue(struct k_work_q *work_q,
+					  struct k_delayed_work *work,
+					  k_timeout_t delay)
 {
 	k_spinlock_key_t key = k_spin_lock(&lock);
 	int err = 0;
@@ -129,6 +139,17 @@ done:
 	k_spin_unlock(&lock, key);
 	return err;
 }
+
+#ifdef CONFIG_USERSPACE
+static inline int z_vrfy_k_delayed_work_submit_to_queue(
+						struct k_work_q *work_q,
+						struct k_delayed_work *work,
+						k_timeout_t delay)
+{
+	return z_impl_k_delayed_work_submit_to_queue(work_q, work, delay);
+}
+#include <syscalls/k_delayed_work_submit_to_queue_mrsh.c>
+#endif
 
 int k_delayed_work_cancel(struct k_delayed_work *work)
 {

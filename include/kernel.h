@@ -3269,8 +3269,8 @@ extern void k_work_q_user_start(struct k_work_q *work_q,
  *
  * @return N/A
  */
-extern void k_delayed_work_init(struct k_delayed_work *work,
-				k_work_handler_t handler);
+__syscall void k_delayed_work_init(struct k_delayed_work *work,
+				   k_work_handler_t handler);
 
 /**
  * @brief Submit a delayed work item.
@@ -3302,9 +3302,9 @@ extern void k_delayed_work_init(struct k_delayed_work *work,
  * @retval -EINVAL Work item is being processed or has completed its work.
  * @retval -EADDRINUSE Work item is pending on a different workqueue.
  */
-extern int k_delayed_work_submit_to_queue(struct k_work_q *work_q,
-					  struct k_delayed_work *work,
-					  k_timeout_t delay);
+__syscall int k_delayed_work_submit_to_queue(struct k_work_q *work_q,
+					     struct k_delayed_work *work,
+					     k_timeout_t delay);
 
 /**
  * @brief Cancel a delayed work item.
