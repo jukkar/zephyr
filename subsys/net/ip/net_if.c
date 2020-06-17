@@ -655,7 +655,9 @@ static void iface_router_run_timer(uint32_t current_time)
 	}
 
 	if (new_timer != UINT_MAX) {
-		k_delayed_work_submit(&router_timer, K_MSEC(new_timer));
+		k_delayed_work_submit_to_queue(net_work_q,
+					       &router_timer,
+					       K_MSEC(new_timer));
 	}
 }
 
@@ -983,9 +985,10 @@ static void dad_timeout(struct k_work *work)
 	}
 
 	if (ifaddr) {
-		k_delayed_work_submit(&dad_timer,
-				      K_MSEC(ifaddr->dad_start +
-					     DAD_TIMEOUT - current_time));
+		k_delayed_work_submit_to_queue(net_work_q, &dad_timer,
+					       K_MSEC(ifaddr->dad_start +
+						      DAD_TIMEOUT -
+						      current_time));
 	}
 }
 
@@ -1010,8 +1013,9 @@ static void net_if_ipv6_start_dad(struct net_if *iface,
 			sys_slist_append(&active_dad_timers, &ifaddr->dad_node);
 
 			if (!k_delayed_work_remaining_get(&dad_timer)) {
-				k_delayed_work_submit(&dad_timer,
-						      K_MSEC(DAD_TIMEOUT));
+				k_delayed_work_submit_to_queue(
+					net_work_q, &dad_timer,
+					K_MSEC(DAD_TIMEOUT));
 			}
 		}
 	} else {
@@ -1143,9 +1147,10 @@ static void rs_timeout(struct k_work *work)
 	}
 
 	if (ipv6) {
-		k_delayed_work_submit(&rs_timer,
-				      K_MSEC(ipv6->rs_start +
-					     RS_TIMEOUT - current_time));
+		k_delayed_work_submit_to_queue(net_work_q, &rs_timer,
+					       K_MSEC(ipv6->rs_start +
+						      RS_TIMEOUT -
+						      current_time));
 	}
 }
 
@@ -1164,7 +1169,9 @@ void net_if_start_rs(struct net_if *iface)
 		sys_slist_append(&active_rs_timers, &ipv6->rs_node);
 
 		if (!k_delayed_work_remaining_get(&rs_timer)) {
-			k_delayed_work_submit(&rs_timer, K_MSEC(RS_TIMEOUT));
+			k_delayed_work_submit_to_queue(net_work_q,
+						       &rs_timer,
+						       K_MSEC(RS_TIMEOUT));
 		}
 	}
 }
@@ -1373,8 +1380,9 @@ static void address_lifetime_timeout(struct k_work *work)
 
 		NET_DBG("Waiting for %d ms", (int32_t)timeout_update);
 
-		k_delayed_work_submit(&address_lifetime_timer,
-				      K_MSEC(timeout_update));
+		k_delayed_work_submit_to_queue(net_work_q,
+					       &address_lifetime_timer,
+					       K_MSEC(timeout_update));
 	}
 }
 
@@ -1395,11 +1403,13 @@ static void address_submit_work(struct net_if_addr *ifaddr)
 		k_delayed_work_cancel(&address_lifetime_timer);
 
 		if (ifaddr->lifetime.wrap_counter > 0 && remaining == 0) {
-			k_delayed_work_submit(&address_lifetime_timer,
-					      K_MSEC(NET_TIMEOUT_MAX_VALUE));
+			k_delayed_work_submit_to_queue(
+				net_work_q, &address_lifetime_timer,
+				K_MSEC(NET_TIMEOUT_MAX_VALUE));
 		} else {
-			k_delayed_work_submit(&address_lifetime_timer,
-				       K_MSEC(ifaddr->lifetime.timer_timeout));
+			k_delayed_work_submit_to_queue(
+				net_work_q, &address_lifetime_timer,
+				K_MSEC(ifaddr->lifetime.timer_timeout));
 		}
 
 		NET_DBG("Next wakeup in %d ms",
@@ -1940,8 +1950,9 @@ static void prefix_lifetime_timeout(struct k_work *work)
 
 		NET_DBG("Waiting for %d ms", (uint32_t)timeout_update);
 
-		k_delayed_work_submit(&prefix_lifetime_timer,
-				      K_MSEC(timeout_update));
+		k_delayed_work_submit_to_queue(net_work_q,
+					       &prefix_lifetime_timer,
+					       K_MSEC(timeout_update));
 	}
 }
 
@@ -1955,11 +1966,13 @@ static void prefix_submit_work(struct net_if_ipv6_prefix *ifprefix)
 		k_delayed_work_cancel(&prefix_lifetime_timer);
 
 		if (ifprefix->lifetime.wrap_counter > 0 && remaining == 0) {
-			k_delayed_work_submit(&prefix_lifetime_timer,
-					      K_MSEC(NET_TIMEOUT_MAX_VALUE));
+			k_delayed_work_submit_to_queue(
+				net_work_q, &prefix_lifetime_timer,
+				K_MSEC(NET_TIMEOUT_MAX_VALUE));
 		} else {
-			k_delayed_work_submit(&prefix_lifetime_timer,
-				     K_MSEC(ifprefix->lifetime.timer_timeout));
+			k_delayed_work_submit_to_queue(
+				net_work_q, &prefix_lifetime_timer,
+				K_MSEC(ifprefix->lifetime.timer_timeout));
 		}
 
 		NET_DBG("Next wakeup in %d ms",

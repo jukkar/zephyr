@@ -72,6 +72,20 @@ config NET_USER_MODE_PRIO
 	help
 	  The thread is a cooperative thread using this priority.
 
+config NET_WORKQUEUE_STACK_SIZE
+	int "Stack size of network user mode worker queue thread"
+	default 1024
+	depends on NET_USER_MODE
+	help
+	  Size of the stack that handles user mode delayed works.
+
+config NET_WORKQUEUE_PRIO
+	int "Priority of the network user mode worker queue thread"
+	default 7
+	depends on NET_USER_MODE
+	help
+	  The thread is a cooperative thread using this priority.
+
 config NET_USER_MODE_MAX_RX_MSG
 	int "Max number of RX msgs from net device driver to user mode handler"
 	default NET_PKT_RX_COUNT

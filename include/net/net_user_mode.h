@@ -30,12 +30,18 @@ extern struct k_mem_partition net_partition;
 
 #define NET_THREAD_FLAGS K_USER
 
+#define net_work_q (&net_user_work_q)
+#define NET_WORK_Q_PRIO K_PRIO_COOP(CONFIG_NET_WORKQUEUE_PRIO)
+extern struct k_work_q net_user_work_q;
+
 #else /* CONFIG_NET_USER_MODE */
 
 #define NET_THREAD_FLAGS 0
 
 #define NET_BMEM
 #define NET_DMEM
+
+#define net_work_q (&k_sys_work_q)
 
 #endif /* CONFIG_NET_USER_MODE */
 

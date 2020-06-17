@@ -146,12 +146,18 @@ static void net_user_mode_handler(void)
 	net_init_rest();
 }
 
+/** Work queue that handles network work. The queue is running in user mode.
+ */
+struct k_work_q net_user_work_q;
+static K_THREAD_STACK_DEFINE(net_work_stack, CONFIG_NET_WORKQUEUE_STACK_SIZE);
+
 int net_user_mode_init(void)
 {
 	net_mem_domain_init();
 
 	net_if_device_init();
 
+	/* The actual network stack is run by this thread */
 	(void)k_thread_create(&net_user_mode_thread,
 			      net_user_mode_stack,
 			      K_THREAD_STACK_SIZEOF(net_user_mode_stack),
@@ -167,6 +173,19 @@ int net_user_mode_init(void)
 	net_access_grant_tx(&net_user_mode_thread);
 	net_access_grant_rx(&net_user_mode_thread);
 
+	/* The net_user_work_q will handle all the work items submitted by
+	 * k_delayed_work_submit() or k_work_submit()
+	 */
+	k_work_q_user_start(&net_user_work_q,
+			    net_work_stack,
+			    K_THREAD_STACK_SIZEOF(net_work_stack),
+			    NET_WORK_Q_PRIO);
+	k_thread_name_set(&net_user_work_q.thread, "net_work_q");
+
+	net_access_grant_tx(&net_user_work_q.thread);
+	net_access_grant_rx(&net_user_work_q.thread);
+
+	/* Initialization that need to be done in kernel mode */
 	net_tc_user_mode_init(&net_user_mode_thread);
 
 	k_thread_start(&net_user_mode_thread);
