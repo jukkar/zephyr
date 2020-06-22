@@ -91,16 +91,8 @@
 		__app_shmem_regions_end = .;
 	} GROUP_LINK_IN(ROMABLE_REGION)
 
-	SECTION_PROLOGUE(net_l2,,)
-	{
-		__net_l2_start = .;
-		*(".net_l2.init")
-		KEEP(*(SORT_BY_NAME(".net_l2.init*")))
-		__net_l2_end = .;
-	} GROUP_LINK_IN(ROMABLE_REGION)
-
 #if defined(CONFIG_NET_SOCKETS)
-	SECTION_PROLOGUE(net_socket_register,,)
+	SECTION_PROLOGUE(_net_socket_register,,)
 	{
 		_net_socket_register_list_start = .;
 		KEEP(*(SORT_BY_NAME("._net_socket_register.*")))
@@ -109,12 +101,11 @@
 #endif
 
 #if defined(CONFIG_NET_L2_PPP)
-	SECTION_PROLOGUE(net_ppp_proto,,)
+	SECTION_PROLOGUE(_ppp_protocol_handler,,)
 	{
-		__net_ppp_proto_start = .;
-		*(".net_ppp_proto.*")
-		KEEP(*(SORT_BY_NAME(".net_ppp_proto.*")))
-		__net_ppp_proto_end = .;
+		_ppp_protocol_handler_list_start = .;
+		KEEP(*("._ppp_protocol_handler.static.*"))
+		_ppp_protocol_handler_list_end = .;
 	} GROUP_LINK_IN(ROMABLE_REGION)
 #endif
 
