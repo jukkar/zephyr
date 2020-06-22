@@ -302,6 +302,7 @@ void *z_impl_k_object_alloc(enum k_objects otype)
 	case K_OBJ_THREAD_STACK_ELEMENT:	/* No aligned allocator */
 	case K_OBJ_NET_SOCKET:			/* Indeterminate size */
 	case K_OBJ_NET_IF:			/* Indeterminate size */
+	case K_OBJ_NET_IF_DEV:			/* Indeterminate size */
 		LOG_ERR("forbidden object type '%s' requested",
 			otype_to_str(otype));
 		return NULL;

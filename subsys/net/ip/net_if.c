@@ -379,6 +379,7 @@ static inline void init_iface(struct net_if *iface)
 
 #ifdef CONFIG_USERSPACE
 	z_object_init(iface);
+	z_object_init(iface->if_dev);
 #endif
 
 	api->init(iface);

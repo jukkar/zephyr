@@ -104,6 +104,7 @@ kobjects = OrderedDict([
     ("device", (None, False, False)),
     ("NET_SOCKET", (None, False, False)),
     ("net_if", (None, False, False)),
+    ("net_if_dev", (None, False, False)),
     ("sys_mutex", (None, True, False)),
     ("k_futex", (None, True, False))
 ])
