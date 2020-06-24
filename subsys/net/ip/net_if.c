@@ -162,6 +162,35 @@ struct net_if *z_vrfy_net_if_get_by_index(int index)
 #include <syscalls/net_if_get_by_index_mrsh.c>
 #endif
 
+bool z_impl_net_if_flag_is_set(struct net_if *iface,
+			       enum net_if_flag value)
+{
+	NET_ASSERT(iface);
+
+	return atomic_test_bit(iface->if_dev->flags, value);
+}
+
+#ifdef CONFIG_USERSPACE
+static bool z_vrfy_net_if_flag_is_set(struct net_if *iface,
+				      enum net_if_flag value)
+{
+	struct z_object *zo;
+	int ret;
+
+	zo = z_object_find(iface);
+
+	ret = z_object_validate(zo, K_OBJ_NET_IF, _OBJ_INIT_TRUE);
+	if (ret != 0) {
+		z_dump_object_error(ret, iface, zo, K_OBJ_NET_IF);
+		return false;
+	}
+
+	return z_impl_net_if_flag_is_set(iface, value);
+}
+
+#include <syscalls/net_if_flag_is_set_mrsh.c>
+#endif
+
 static inline void net_context_send_cb(struct net_context *context,
 				       int status)
 {

@@ -515,13 +515,8 @@ static inline void net_if_flag_clear(struct net_if *iface,
  *
  * @return True if the value is set, false otherwise
  */
-static inline bool net_if_flag_is_set(struct net_if *iface,
-				      enum net_if_flag value)
-{
-	NET_ASSERT(iface);
-
-	return atomic_test_bit(iface->if_dev->flags, value);
-}
+__syscall bool net_if_flag_is_set(struct net_if *iface,
+				  enum net_if_flag value);
 
 /**
  * @brief Send a packet through a net iface
