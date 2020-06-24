@@ -44,14 +44,32 @@ extern "C" {
 /** @cond INTERNAL_HIDDEN */
 
 /* Network subsystem logging helpers */
-#ifdef CONFIG_THREAD_NAME
+/* k_thread_name_get() not available for userspace */
+#if IS_ENABLED(CONFIG_THREAD_NAME)
+#if IS_ENABLED(CONFIG_NET_USER_MODE)
+#define NET_DBG(fmt, ...)						\
+	do {								\
+		char tname[CONFIG_THREAD_MAX_NAME_LEN];			\
+									\
+		k_thread_name_copy(k_current_get(), tname, sizeof(tname)); \
+		if (tname[0]) {						\
+			LOG_DBG("(%s): " fmt, log_strdup(tname),	\
+				##__VA_ARGS__);				\
+		} else {						\
+			LOG_DBG("(%p): " fmt, k_current_get(),		\
+				##__VA_ARGS__);				\
+		}							\
+	} while (0)
+#else /* CONFIG_NET_USER_MODE */
 #define NET_DBG(fmt, ...) LOG_DBG("(%s): " fmt,				\
 			log_strdup(k_thread_name_get(k_current_get())), \
 			##__VA_ARGS__)
-#else
+#endif /* CONFIG_NET_USER_MODE */
+#else /* CONFIG_THREAD_NAME */
 #define NET_DBG(fmt, ...) LOG_DBG("(%p): " fmt, k_current_get(),	\
 				  ##__VA_ARGS__)
 #endif /* CONFIG_THREAD_NAME */
+
 #define NET_ERR(fmt, ...) LOG_ERR(fmt, ##__VA_ARGS__)
 #define NET_WARN(fmt, ...) LOG_WRN(fmt, ##__VA_ARGS__)
 #define NET_INFO(fmt, ...) LOG_INF(fmt,  ##__VA_ARGS__)
