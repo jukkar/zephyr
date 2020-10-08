@@ -7,6 +7,8 @@
 #ifndef GSM_PPP_H_
 #define GSM_PPP_H_
 
+#define GSM_MODEM_DEVICE_NAME "modem_gsm"
+
 struct device;
 void gsm_ppp_start(const struct device *device);
 void gsm_ppp_stop(const struct device *device);
