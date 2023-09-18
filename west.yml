@@ -23,6 +23,8 @@ manifest:
       url-base: https://github.com/zephyrproject-rtos
     - name: babblesim
       url-base: https://github.com/BabbleSim
+    - name: ncs
+      url-base: https://github.com/nrfconnect
 
   group-filter: [-babblesim]
 
@@ -362,6 +364,11 @@ manifest:
     - name: thrift
       path: modules/lib/thrift
       revision: 10023645a0e6cb7ce23fcd7fd3dbac9f18df6234
+    - name: hostap
+      remote: ncs
+      repo-path: sdk-hostap
+      path: modules/lib/hostap
+      revision: pull/125/head
 
   self:
     path: zephyr
