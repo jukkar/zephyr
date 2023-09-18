@@ -5,6 +5,9 @@
 # SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 #
 
+config ZEPHYR_HOSTAP_MODULE
+	bool
+
 config WPA_SUPP
 	bool "WPA supplicant support"
 	# Need full POSIX from libc, Zephyr's POSIX support is only partial
@@ -15,7 +18,7 @@ config WPA_SUPP
 	select NET_SOCKETPAIR
 	select NET_L2_WIFI_MGMT
 	select WIFI_NM
-	select EXPERIMENTAL if !SOC_SERIES_NRF53X && !SOC_SERIES_NRF91X
+	select EXPERIMENTAL
 	help
 	  WPA supplicant implements 802.1X related functions.
 
@@ -42,7 +45,6 @@ config WEP
 config WPA_SUPP_CRYPTO_PSA
 	bool "PSA Crypto support for WiFi"
 	select WEP
-	select NRF_SECURITY
 	select PSA_WANT_KEY_TYPE_AES
 	select PSA_WANT_ALG_CMAC
 	select PSA_WANT_ALG_CBC_PKCS7
@@ -67,13 +69,11 @@ config WPA_SUPP_CRYPTO_PSA
 	select MBEDTLS_CIPHER_MODE_CBC
 	select MBEDTLS_SSL_TLS_C
 	select MBEDTLS_KEY_EXCHANGE_ALL_ENABLED
-	default y if BUILD_WITH_TFM
 
 config WPA_SUPP_CRYPTO
 	bool "Legacy Crypto support for WiFi"
 	select WEP
 	select MBEDTLS
-	select NRF_SECURITY
 	select MBEDTLS_CIPHER_MODE_CBC
 	select MBEDTLS_CIPHER_MODE_CTR
 	select MBEDTLS_LEGACY_CRYPTO_C
@@ -81,7 +81,6 @@ config WPA_SUPP_CRYPTO
 	select MBEDTLS_CTR_DRBG_C
 	select MBEDTLS_PK_WRITE_C
 	select MBEDTLS_KEY_EXCHANGE_ALL_ENABLED
-	default y if !BUILD_WITH_TFM
 
 # To fix MAC_MD5 Kconfig warning
 config NET_TCP_ISN_RFC6528
@@ -93,7 +92,6 @@ config WPA_SUPP_CRYPTO_ENTERPRISE
 config WPA_SUPP_WPA3
 	bool "WPA3 support"
 	select WPA_SUPP_CRYPTO
-	default y
 
 config WPA_SUPP_AP
 	bool "AP mode support"
