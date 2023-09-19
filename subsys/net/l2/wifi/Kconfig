@@ -1,6 +1,22 @@
 # Copyright (c) 2023 Nordic Semiconductor ASA
 # SPDX-License-Identifier: Apache-2.0
 
+menuconfig NET_L2_WIFI
+	bool "Native (non-offloaded) Wi-Fi support"
+	help
+	  Add support for native Wi-Fi with WPA supplicant, enabling selecting relevant hardware
+	  drivers. If you do not select this, then only offloaded Wi-Fi can be used.
+
+if NET_L2_WIFI
+
+module = NET_L2_WIFI
+module-dep = NET_LOG
+module-str = Log level for Wi-Fi L2 layer
+module-help = Enables Wi-Fi L2 to output debug messages.
+source "subsys/net/Kconfig.template.log_config.net"
+
+endif # NET_L2_WIFI
+
 config WIFI_MGMT_RAW_SCAN_RESULTS
 	bool "Raw scan results"
 	help
@@ -135,3 +151,31 @@ module-str = Log level for Wi-Fi Network manager module
 module-help = Enables using the Wi-Fi Network managers to manage the Wi-Fi network interfaces.
 source "subsys/net/Kconfig.template.log_config.net"
 endif # WIFI_NM
+
+config WIFI_SUPPLICANT
+	bool "Wi-Fi supplicant support"
+	select NET_NM
+	help
+	  This option enables using the Wi-Fi supplicant to
+	  manage the Wi-Fi connectivity.
+
+if WIFI_SUPPLICANT
+
+choice WIFI_SUPPLICANT_IN_USE
+	prompt "WPA supplicant to use"
+	default WIFI_SUPPLICANT_HOSTAP
+
+config WIFI_SUPPLICANT_HOSTAP
+	bool "hostap WPA supplicant"
+	help
+	  Use the WPA supplicant found in hostap sources
+
+endchoice
+
+module = WIFI_SUPPLICANT
+module-dep = NET_LOG
+module-str = Log level for Wi-Fi supplicant module
+module-help = Enables using the Wi-Fi supplicant to manage the Wi-Fi connectivity.
+source "subsys/net/Kconfig.template.log_config.net"
+
+endif # WIFI_SUPPLICANT
