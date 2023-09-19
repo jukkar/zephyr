@@ -21,6 +21,34 @@
 #define ZEPHYR_INCLUDE_NET_WIFI_H_
 
 #include <zephyr/sys/util.h>  /* for ARRAY_SIZE */
+#include <zephyr/net/ethernet.h>
+#include <zephyr/net/supplicant-driver.h>
+
+/** What is the supplicant we are using. */
+enum wifi_supplicant_type {
+	WIFI_SUPPLICANT_UNKNOWN = 0, /* Making sure that the uninitialized value (0) is invalid */
+	WIFI_SUPPLICANT_HOSTAPD = 1,
+};
+
+struct wifi_api {
+	/**
+	 * The ethernet_api must be placed in first position in this
+	 * struct so that we are compatible with network interface API.
+	 */
+	struct ethernet_api eth_api;
+
+	/** Supplicant we are using. This is needed so that we can select the
+	 * correct supplicant driver API.
+	 */
+	enum wifi_supplicant_type type;
+
+	/** WPA supplicant driver API to use. */
+	union {
+		/* hostapd driver API function pointers */
+		struct wpa_driver_ops ops;
+	};
+};
+
 
 #define WIFI_COUNTRY_CODE_LEN 2
 
