@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2022 Nordic Semiconductor ASA
 #
-# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+# SPDX-License-Identifier: Apache-2.0
 #
 
 if(CONFIG_WPA_SUPP)
@@ -20,7 +20,7 @@ zephyr_compile_definitions(
 )
 
 zephyr_include_directories(
-	${CMAKE_CURRENT_SOURCE_DIR}/src
+	${CMAKE_CURRENT_SOURCE_DIR}
 	${HOSTAP_BASE}/
 	${WPA_SUPPLICANT_BASE}/
 	${COMMON_SRC_BASE}/
@@ -41,16 +41,16 @@ zephyr_library_compile_definitions(
 	CONFIG_SUITEB192
 	)
 
-zephyr_library_compile_definitions_ifndef(CONFIG_WPA_SUPP_CRYPTO
+zephyr_library_compile_definitions_ifndef(CONFIG_WIFI_SUPPLICANT_HOSTAP_CRYPTO
 	CONFIG_NO_PBKDF2
 )
 
-zephyr_library_compile_definitions_ifdef(CONFIG_WPA_SUPP_NO_DEBUG
+zephyr_library_compile_definitions_ifdef(CONFIG_WIFI_SUPPLICANT_HOSTAP_NO_DEBUG
 	CONFIG_NO_STDOUT_DEBUG
 )
 
 zephyr_library_include_directories(
-	${CMAKE_CURRENT_SOURCE_DIR}/src
+	${CMAKE_CURRENT_SOURCE_DIR}
 	${HOSTAP_BASE}/
 	${COMMON_SRC_BASE}/utils
 	${COMMON_SRC_BASE}/drivers
@@ -97,15 +97,14 @@ zephyr_library_sources(
 	${WPA_SUPPLICANT_BASE}/wpa_cli_cmds.c
 	${WPA_SUPPLICANT_BASE}/ctrl_iface_zephyr.c
 	${WPA_SUPPLICANT_BASE}/wpa_cli_zephyr.c
-	# Zephyr main
-	src/supp_main.c
-	src/utils/wpa_debug.c
-	src/supp_api.c
-	src/supp_events.c
+	hostap.c
+	wpa_debug.c
+	supp_api.c
+	events.c
 )
 
 zephyr_library_sources_ifdef(CONFIG_WPA_CLI
-	src/wpa_cli.c
+	wpa_cli.c
 )
 
 zephyr_library_sources_ifdef(CONFIG_WPA_SUPP_AP
