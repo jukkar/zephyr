@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-if(CONFIG_WPA_SUPP)
+if(CONFIG_WIFI_SUPPLICANT_HOSTAP)
 
 zephyr_library()
 
@@ -107,7 +107,7 @@ zephyr_library_sources_ifdef(CONFIG_WPA_CLI
 	wpa_cli.c
 )
 
-zephyr_library_sources_ifdef(CONFIG_WPA_SUPP_AP
+zephyr_library_sources_ifdef(CONFIG_WIFI_SUPPLICANT_HOSTAP_AP
 	${WPA_SUPPLICANT_BASE}/ap.c
 	${COMMON_SRC_BASE}/ap/ap_config.c
 	${COMMON_SRC_BASE}/ap/ap_drv_ops.c
@@ -150,7 +150,7 @@ zephyr_library_sources_ifdef(CONFIG_WPA_SUPP_AP
 	${COMMON_SRC_BASE}/eapol_auth/eapol_auth_sm.c
 )
 
-zephyr_library_compile_definitions_ifdef(CONFIG_WPA_SUPP_AP
+zephyr_library_compile_definitions_ifdef(CONFIG_WIFI_SUPPLICANT_HOSTAP_AP
 	CONFIG_AP
 	CONFIG_NO_RADIUS
 	CONFIG_NO_VLAN
@@ -162,21 +162,21 @@ zephyr_library_compile_definitions_ifdef(CONFIG_WPA_SUPP_AP
 )
 
 
-zephyr_library_sources_ifndef(CONFIG_WPA_SUPP_CRYPTO
+zephyr_library_sources_ifndef(CONFIG_WIFI_SUPPLICANT_HOSTAP_CRYPTO
 	${COMMON_SRC_BASE}/crypto/crypto_none.c
 	${COMMON_SRC_BASE}/crypto/tls_none.c
 )
 
-zephyr_library_compile_definitions_ifndef(CONFIG_WPA_SUPP_CRYPTO
+zephyr_library_compile_definitions_ifndef(CONFIG_WIFI_SUPPLICANT_HOSTAP_CRYPTO
 	CONFIG_NO_WPA
 	CONFIG_CRYPTO_INTERNAL
 )
 
-zephyr_library_compile_definitions_ifdef(CONFIG_WPA_SUPP_CRYPTO
+zephyr_library_compile_definitions_ifdef(CONFIG_WIFI_SUPPLICANT_HOSTAP_CRYPTO
 	CONFIG_WEP
 )
 
-zephyr_library_sources_ifdef(CONFIG_WPA_SUPP_CRYPTO
+zephyr_library_sources_ifdef(CONFIG_WIFI_SUPPLICANT_HOSTAP_CRYPTO
 	${COMMON_SRC_BASE}/common/wpa_common.c
 	${COMMON_SRC_BASE}/rsn_supp/wpa.c
 	${COMMON_SRC_BASE}/rsn_supp/preauth.c
@@ -197,7 +197,7 @@ zephyr_library_sources_ifdef(CONFIG_WPA_SUPP_CRYPTO
 )
 
 
-zephyr_library_sources_ifdef(CONFIG_WPA_SUPP_WPA3
+zephyr_library_sources_ifdef(CONFIG_WIFI_SUPPLICANT_HOSTAP_WPA3
 	${COMMON_SRC_BASE}/common/sae.c
 	${COMMON_SRC_BASE}/common/dragonfly.c
 
@@ -205,16 +205,16 @@ zephyr_library_sources_ifdef(CONFIG_WPA_SUPP_WPA3
 	${COMMON_SRC_BASE}/crypto/sha256-kdf.c
 )
 
-zephyr_library_compile_definitions_ifdef(CONFIG_WPA_SUPP_WPA3
+zephyr_library_compile_definitions_ifdef(CONFIG_WIFI_SUPPLICANT_HOSTAP_WPA3
 	CONFIG_SAE
 	CONFIG_ECC
 )
 
-zephyr_library_include_directories_ifdef(CONFIG_WPA_SUPP_CRYPTO
+zephyr_library_include_directories_ifdef(CONFIG_WIFI_SUPPLICANT_HOSTAP_CRYPTO
 	${CMAKE_SOURCE_DIR}
 )
 
-zephyr_library_sources_ifdef(CONFIG_WPA_SUPP_P2P
+zephyr_library_sources_ifdef(CONFIG_WIFI_SUPPLICANT_HOSTAP_P2P
 	${WPA_SUPPLICANT_BASE}/p2p_supplicant.c
 	${WPA_SUPPLICANT_BASE}/p2p_supplicant_sd.c
 	${COMMON_SRC_BASE}/p2p/p2p.c
@@ -232,7 +232,7 @@ zephyr_library_sources_ifdef(CONFIG_WPA_SUPP_P2P
 	${WPA_SUPPLICANT_BASE}/gas_query.c
 	${WPA_SUPPLICANT_BASE}/offchannel.c
 )
-zephyr_library_sources_ifdef(CONFIG_WPA_SUPP_WPS
+zephyr_library_sources_ifdef(CONFIG_WIFI_SUPPLICANT_HOSTAP_WPS
 	${WPA_SUPPLICANT_BASE}/wps_supplicant.c
 	${COMMON_SRC_BASE}/utils/uuid.c
 	${COMMON_SRC_BASE}/eap_peer/eap_wsc.c
@@ -250,18 +250,18 @@ zephyr_library_sources_ifdef(CONFIG_WPA_SUPP_WPS
 	${COMMON_SRC_BASE}/crypto/dh_group5.c
 )
 
-zephyr_library_compile_definitions_ifdef(CONFIG_WPA_SUPP_P2P
+zephyr_library_compile_definitions_ifdef(CONFIG_WIFI_SUPPLICANT_HOSTAP_P2P
 	CONFIG_P2P
 	CONFIG_GAS
 	CONFIG_OFFCHANNEL
 )
 
-zephyr_library_compile_definitions_ifdef(CONFIG_WPA_SUPP_WPS
+zephyr_library_compile_definitions_ifdef(CONFIG_WIFI_SUPPLICANT_HOSTAP_WPS
 	CONFIG_WPS
 	EAP_WSC
 )
 
-zephyr_library_sources_ifdef(CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE
+zephyr_library_sources_ifdef(CONFIG_WIFI_SUPPLICANT_HOSTAP_CRYPTO_ENTERPRISE
 	${COMMON_SRC_BASE}/eap_peer/eap_tls.c
 	${COMMON_SRC_BASE}/eap_peer/eap_tls_common.c
 
@@ -315,7 +315,7 @@ zephyr_library_sources_ifdef(CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE
 
 )
 
-zephyr_library_compile_definitions_ifdef(CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE
+zephyr_library_compile_definitions_ifdef(CONFIG_WIFI_SUPPLICANT_HOSTAP_CRYPTO_ENTERPRISE
 	CONFIG_EAP_TLS
 	CONFIG_IEEE8021X_EAPOL
 	CONFIG_EAP_PEAP
@@ -333,7 +333,7 @@ zephyr_library_compile_definitions_ifdef(CONFIG_WPA_SUPP_CRYPTO_ENTERPRISE
 	CONFIG_EAP_IKEv2
 )
 
-zephyr_library_sources_ifdef(CONFIG_WPA_SUPP_EAPOL
+zephyr_library_sources_ifdef(CONFIG_WIFI_SUPPLICANT_HOSTAP_EAPOL
 	${COMMON_SRC_BASE}/eapol_supp/eapol_supp_sm.c
 	${COMMON_SRC_BASE}/eap_peer/eap.c
 	${COMMON_SRC_BASE}/eap_peer/eap_methods.c
@@ -341,7 +341,7 @@ zephyr_library_sources_ifdef(CONFIG_WPA_SUPP_EAPOL
 	${COMMON_SRC_BASE}/rsn_supp/pmksa_cache.c
 )
 
-zephyr_library_compile_definitions_ifdef(CONFIG_WPA_SUPP_EAPOL
+zephyr_library_compile_definitions_ifdef(CONFIG_WIFI_SUPPLICANT_HOSTAP_EAPOL
 	IEEE8021X_EAPOL
 )
 endif()

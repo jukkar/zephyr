@@ -1,40 +1,40 @@
-# Nordic WiFi driver for nRF52840 and nRF5340
-#
-# Copyright (c) 2022 Nordic Semiconductor
-#
-# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
-#
+# Copyright (c) 2023 Nordic Semiconductor ASA
+# SPDX-License-Identifier: Apache-2.0
 
-config ZEPHYR_HOSTAP_MODULE
-	bool
-
-config WPA_SUPP
-	bool "WPA supplicant support"
+# This option selects needed options
+config WIFI_SUPPLICANT_USE_HOSTAP
+       bool
+       default y
 	# Need full POSIX from libc, Zephyr's POSIX support is only partial
-	depends on !POSIX_API
+	depends on !POSIX_API && WIFI_SUPPLICANT_HOSTAP
 	select POSIX_CLOCK
 	select NET_SOCKETS
 	select NET_SOCKETS_PACKET
 	select NET_SOCKETPAIR
-	select NET_L2_WIFI_MGMT
 	select WIFI_NM
-	select EXPERIMENTAL
+	select NET_INTERFACE_NAME
 	help
 	  WPA supplicant implements 802.1X related functions.
 
-if WPA_SUPP
+if WIFI_SUPPLICANT_HOSTAP
 
 choice LIBC_IMPLEMENTATION
 	default NEWLIB_LIBC
 endchoice
 
-config WPA_SUPP_THREAD_STACK_SIZE
+config WIFI_SUPPLICANT_HOSTAP_THREAD_STACK_SIZE
 	int "Stack size for wpa_supplicant thread"
 	default 8192
 
-config WPA_SUPP_IFACE_WQ_STACK_SIZE
-	int "Stack size for wpa_supplicant iface workqueue"
+config WIFI_SUPPLICANT_HOSTAP_WQ_STACK_SIZE
+	int "Stack size for network interface workqueue"
 	default 4096
+
+config WIFI_SUPPLICANT_HOSTAP_WQ_PRIO
+	int "Priority of the network interface work queue"
+	default 7
+	help
+	  Set the priority of the the network interface worker queue.
 
 config WEP
 	bool "WEP (Legacy crypto) support"
@@ -42,7 +42,7 @@ config WEP
 # To easily manage the crypto dependencies we separate the crypto
 # implementations into two Kconfig options. One for the legacy crypto
 # and one for the PSA crypto.
-config WPA_SUPP_CRYPTO_PSA
+config WIFI_SUPPLICANT_HOSTAP_CRYPTO_PSA
 	bool "PSA Crypto support for WiFi"
 	select WEP
 	select PSA_WANT_KEY_TYPE_AES
@@ -69,11 +69,13 @@ config WPA_SUPP_CRYPTO_PSA
 	select MBEDTLS_CIPHER_MODE_CBC
 	select MBEDTLS_SSL_TLS_C
 	select MBEDTLS_KEY_EXCHANGE_ALL_ENABLED
+	default y if BUILD_WITH_TFM
 
-config WPA_SUPP_CRYPTO
+config WIFI_SUPPLICANT_HOSTAP_CRYPTO
 	bool "Legacy Crypto support for WiFi"
 	select WEP
 	select MBEDTLS
+	select NRF_SECURITY
 	select MBEDTLS_CIPHER_MODE_CBC
 	select MBEDTLS_CIPHER_MODE_CTR
 	select MBEDTLS_LEGACY_CRYPTO_C
@@ -81,34 +83,36 @@ config WPA_SUPP_CRYPTO
 	select MBEDTLS_CTR_DRBG_C
 	select MBEDTLS_PK_WRITE_C
 	select MBEDTLS_KEY_EXCHANGE_ALL_ENABLED
+	default y if !BUILD_WITH_TFM
 
 # To fix MAC_MD5 Kconfig warning
 config NET_TCP_ISN_RFC6528
-	default n if WPA_SUPP_CRYPTO
+	default n if WIFI_SUPPLICANT_HOSTAP_CRYPTO
 
-config WPA_SUPP_CRYPTO_ENTERPRISE
+config WIFI_SUPPLICANT_HOSTAP_CRYPTO_ENTERPRISE
 	bool "Enterprise Crypto support for WiFi"
 
-config WPA_SUPP_WPA3
+config WIFI_SUPPLICANT_HOSTAP_WPA3
 	bool "WPA3 support"
-	select WPA_SUPP_CRYPTO
+	select WIFI_SUPPLICANT_HOSTAP_CRYPTO
+	default y
 
-config WPA_SUPP_AP
+config WIFI_SUPPLICANT_HOSTAP_AP
 	bool "AP mode support"
-	select WPA_SUPP_CRYPTO
+	select WIFI_SUPPLICANT_HOSTAP_CRYPTO
 
-config WPA_SUPP_WPS
+config WIFI_SUPPLICANT_HOSTAP_WPS
 	bool "WPS support"
 
-config WPA_SUPP_P2P
+config WIFI_SUPPLICANT_HOSTAP_P2P
 	bool "P2P mode support"
-	select WPA_SUPP_AP
-	select WPA_SUPP_WPS
+	select WIFI_SUPPLICANT_HOSTAP_AP
+	select WIFI_SUPPLICANT_HOSTAP_WPS
 
-config WPA_SUPP_EAPOL
+config WIFI_SUPPLICANT_HOSTAP_EAPOL
 	bool "Enable EAPoL supplicant"
 
-config WPA_CLI
+config WIFI_SUPPLICANT_HOSTAP_CLI
 	bool "CLI support for wpa_supplicant"
 	default n
 
@@ -122,7 +126,7 @@ config POSIX_MAX_FDS
 	# Remaining left for the applications running in default configuration
 	default 16 if !POSIX_API
 
-config BSS_MAX_IDLE_TIME
+config WIFI_BSS_MAX_IDLE_TIME
 	int "BSS max idle timeout in seconds"
 	range 0 64000
 	default 300
@@ -136,28 +140,22 @@ config BSS_MAX_IDLE_TIME
 	  Ref: Sec 11.21.13 of IEEE Std 802.11™-2020
 
 # Control interface is stack heavy (buffers + snprintfs)
-# Making calls to RPU from net_mgmt callbacks (status - RSSI)
 config NET_MGMT_EVENT_STACK_SIZE
 	default 4096
 
 config NET_SOCKETS_POLL_MAX
-	default 6
+	default 4
 
-# Supplicant API is stack heavy (buffers + snprintfs) and control interface
-# uses socketpair which pushes the stack usage causing overflow for 2048 bytes.
-config SYSTEM_WORKQUEUE_STACK_SIZE
-	default 2560
-
-module = WPA_SUPP
+module = WIFI_SUPPLICANT_HOSTAP
 module-str = WPA supplicant
 source "subsys/logging/Kconfig.template.log_config"
 
-config WPA_SUPP_DEBUG_LEVEL
+config WIFI_SUPPLICANT_HOSTAP_DEBUG_LEVEL
 	int "Min compiled-in debug message level for WPA supplicant"
-	default 0 if WPA_SUPP_LOG_LEVEL_DBG # MSG_EXCESSIVE
-	default 3 if WPA_SUPP_LOG_LEVEL_INF # MSG_INFO
-	default 4 if WPA_SUPP_LOG_LEVEL_WRN # MSG_WARNING
-	default 5 if WPA_SUPP_LOG_LEVEL_ERR # MSG_ERROR
+	default 0 if WIFI_SUPPLICANT_HOSTAP_LOG_LEVEL_DBG # MSG_EXCESSIVE
+	default 3 if WIFI_SUPPLICANT_HOSTAP_LOG_LEVEL_INF # MSG_INFO
+	default 4 if WIFI_SUPPLICANT_HOSTAP_LOG_LEVEL_WRN # MSG_WARNING
+	default 5 if WIFI_SUPPLICANT_HOSTAP_LOG_LEVEL_ERR # MSG_ERROR
 	default 6
 	help
 	  Minimum priority level of a debug message emitted by WPA supplicant that
@@ -166,11 +164,7 @@ config WPA_SUPP_DEBUG_LEVEL
 	  runtime filtering can also be configured in addition to the compile-time
 	  filtering.
 
-# Debug logs need more buffer space
-config LOG_BUFFER_SIZE
-	default 4096 if WPA_SUPP_LOG_LEVEL_DBG
-	default 2048
-
-config WPA_SUPP_NO_DEBUG
+config WIFI_SUPPLICANT_HOSTAP_NO_DEBUG
 	bool "Disable printing of debug messages, saves code size significantly"
-endif
+
+endif # WIFI_SUPPLICANT_HOSTAP

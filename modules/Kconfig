@@ -46,7 +46,7 @@ source "modules/Kconfig.xtensa"
 source "modules/zcbor/Kconfig"
 source "modules/Kconfig.mcuboot"
 source "modules/Kconfig.intel"
-source "modules/Kconfig.hostap"
+source "modules/hostap/Kconfig"
 comment "Unavailable modules, please install those via the project manifest."
 
 # List of comments to display when Zephyr modules are not available, please
