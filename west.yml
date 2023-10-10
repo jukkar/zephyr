@@ -23,6 +23,8 @@ manifest:
       url-base: https://github.com/zephyrproject-rtos
     - name: babblesim
       url-base: https://github.com/BabbleSim
+    - name: jukkar
+      url-base: https://github.com/jukkar
 
   group-filter: [-babblesim, -optional]
 
@@ -336,6 +338,11 @@ manifest:
     - name: zcbor
       revision: 67fd8bb88d3136738661fa8bb5f9989103f4599e
       path: modules/lib/zcbor
+    - name: hostap
+      remote: jukkar
+      repo-path: hostap
+      path: modules/lib/hostap
+      revision: for-upstream-zephyr
 
   self:
     path: zephyr
