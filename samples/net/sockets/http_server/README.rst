@@ -39,21 +39,21 @@ Server Customization
 
 The server contains several parameters that can be customized based on the requirements. These are the configurable parameters:
 
-- ``NET_HTTP_SERVER_SERVICE_PORT``: Configures Service Port.
+- ``HTTP_SERVER_SERVICE_PORT``: Configures Service Port.
 
-- ``NET_HTTP_SERVER_MAX_CLIENTS``: Defines the maximum number of HTTP/2 clients that the server can handle simultaneously.
+- ``HTTP_SERVER_MAX_CLIENTS``: Defines the maximum number of HTTP/2 clients that the server can handle simultaneously.
 
-- ``NET_HTTP_SERVER_MAX_STREAMS``: Specifies the maximum number of HTTP/2 streams that can be established per client.
+- ``HTTP_SERVER_MAX_STREAMS``: Specifies the maximum number of HTTP/2 streams that can be established per client.
 
-- ``NET_HTTP_SERVER_CLIENT_BUFFER_SIZE``: Defines the buffer size allocated for each client.
+- ``HTTP_SERVER_CLIENT_BUFFER_SIZE``: Defines the buffer size allocated for each client.
 
-- ``NET_HTTP_SERVER_MAX_RESPONSE_SIZE``: Sets the maximum size of an HTTP response that the server can handle.
+- ``HTTP_SERVER_MAX_RESPONSE_SIZE``: Sets the maximum size of an HTTP response that the server can handle.
 
-- ``NET_HTTP_SERVER_MAX_URL_LENGTH``: Specifies the maximum length of an HTTP URL that the server can process.
+- ``HTTP_SERVER_MAX_URL_LENGTH``: Specifies the maximum length of an HTTP URL that the server can process.
 
-- ``NET_HTTP_SERVER_MAX_FRAME_SIZE``: Determines the maximum size of an HTTP/2 frame that the server can handle.
+- ``HTTP_SERVER_MAX_FRAME_SIZE``: Determines the maximum size of an HTTP/2 frame that the server can handle.
 
-- ``NET_HTTP_SERVER_POST_REQUEST_STORAGE_LIMIT``: Sets the maximum size limit for handling POST requests.
+- ``HTTP_SERVER_POST_REQUEST_STORAGE_LIMIT``: Sets the maximum size limit for handling POST requests.
 
 To customize these options, we can run ``west build -t menuconfig``, which provides us with an interactive configuration interface. Then we could navigate from the top-level menu to: ``-> Subsystems and OS Services -> Networking -> Network Protocols``.
 
