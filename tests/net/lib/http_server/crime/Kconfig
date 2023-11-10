@@ -1,0 +1,25 @@
+source "Kconfig.zephyr"
+
+config TEST_SERVER_ADDR
+    string "Test HTTP Server address"
+    default "127.0.0.1"
+
+config TEST_SERVER_PROTO
+    string "Test HTTP Server protocol"
+    default "HTTP/1.1"
+
+config TEST_SERVER_A_PORT
+    int "Test HTTP Server port (service A)"
+    default 4242
+
+config TEST_SERVER_B_PORT
+    int "Test HTTP Server port (service B)"
+    default 7373
+
+config TEST_BUF_SIZE
+    int "Test HTTP receive buffer size (in bytes)"
+    default 1024
+
+config TEST_REQ_TIMEOUT
+    int "Test HTTP request timeout (in milliseconds)"
+    default 1000

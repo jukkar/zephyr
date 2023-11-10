@@ -14,15 +14,8 @@ function(http_server_generate_crime_res
     file(GLOB in_files ${in_dir}/**/*)
     list(TRANSFORM in_files REPLACE ${in_dir}/ "")
 
-    # message(STATUS "@@@: service_id ${service_id}")
-    # message(STATUS "@@@: target ${target}")
-    # message(STATUS "@@@: in_dir ${in_dir}")
-    # message(STATUS "@@@: out_dir ${out_dir}")
-    message(STATUS "@@@: in_files ${in_files}")
-  
     set(seed)
     foreach(file ${in_files})
-      message(STATUS "@@@: file ${file}")
       generate_inc_file_for_target(${target} ${in_dir}/${file} ${out_dir}/${file}.inc --gzip)
       file(MD5 ${in_dir}/${file} file_hash)
       string(APPEND seed "${in_dir}/${file}:${file_hash}")
@@ -107,9 +100,21 @@ function(http_server_generate_crime_res
       "\n"
     )
   
+    set(out_file ${out_dir}/rom_sections.ld)
+    file(WRITE ${out_file}
+      "#include <zephyr/linker/iterable_sections.h>\n"
+      "\n"
+      "ITERABLE_SECTION_ROM(http_resource_${service_id}, 4)"
+    )
+    zephyr_linker_sources(SECTIONS ${out_file})
+    zephyr_iterable_section(
+      NAME http_resource_desc_${service_id}
+      KVMA RAM_REGION GROUP RODATA_REGION SUBALIGN 4
+    )
+
   target_sources(
     ${target}
     PRIVATE
     ${crime_res_c}
   )
-  endfunction()
+endfunction()
