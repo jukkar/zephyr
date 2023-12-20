@@ -27,6 +27,30 @@
 #define MAX_CLIENTS                CONFIG_NET_HTTP_SERVER_MAX_CLIENTS
 #define MAX_STREAMS                CONFIG_NET_HTTP_SERVER_MAX_STREAMS
 
+struct http_client_ctx;
+
+/**
+ * @typedef http_url_cb_t
+ * @brief Callback used when passing url data to the application.
+ * @details Server library will call this callback multiple times until all
+ *          the url is passed to the application. Application can return
+ *          error code to terminate the connection. Application will return
+ *          amount of bytes it was able to consume. If this amount is smaller
+ *          than the url length, then server will call this function again.
+ *          The application will know when all the url is received when the
+ *          data_len is set to 0 and data_buffer is NULL.
+ *
+ * @param client HTTP context information for this client connection.
+ * @param data_buffer Data received.
+ * @param data_len Amount of data received.
+ *
+ * @return >0 how many bytes application was able to consume
+ *         <0 error, server will close the connection
+ */
+typedef int (*http_url_cb_t)(struct http_client_ctx *client,
+			     uint8_t *data_buffer,
+			     size_t data_len);
+
 enum http_resource_type {
 	HTTP_RESOURCE_TYPE_STATIC,
 	HTTP_RESOURCE_TYPE_DYNAMIC,
@@ -37,6 +61,7 @@ struct http_resource_detail {
 	uint32_t bitmask_of_supported_http_methods;
 	enum http_resource_type type;
 	int path_len; /* length of the URL path */
+	http_url_cb_t url_handler;
 };
 BUILD_ASSERT(NUM_BITS(\
 	     sizeof(((struct http_resource_detail *)0)->bitmask_of_supported_http_methods))
@@ -131,6 +156,7 @@ struct http_client_ctx {
 	struct http_stream_ctx streams[MAX_STREAMS];
 	struct http_parser_settings parserSettings;
 	struct http_parser parser;
+	http_url_cb_t url_handler;
 	unsigned char url_buffer[CONFIG_NET_HTTP_SERVER_MAX_URL_LENGTH];
 };
 

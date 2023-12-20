@@ -1169,10 +1169,27 @@ int on_url(struct http_parser *parser, const char *at, size_t length)
 	struct http_client_ctx *ctx = CONTAINER_OF(parser,
 						   struct http_client_ctx,
 						   parser);
+	int sent = 0, ret;
+
 	strncpy(ctx->url_buffer, at, length);
 	ctx->url_buffer[length] = '\0';
 	LOG_DBG("Requested URL: %s", ctx->url_buffer);
-	return 0;
+
+	/* If user is not interested in about the URL, the return now */
+	if (ctx->url_handler == NULL) {
+		return 0;
+	}
+
+	do {
+		ret = ctx->url_handler(ctx, at + sent, length - (size_t)sent);
+		if (ret < 0) {
+			return ret;
+		}
+
+		sent += ret;
+	} while ((size_t)sent <= length);
+
+	return ctx->url_handler(ctx, NULL, 0);
 }
 
 int sendall(int sock, const void *buf, size_t len)

@@ -20,6 +20,28 @@ static uint8_t index_html_gz[] = {
 #include "index.html.gz.inc"
 };
 
+static int url_handler(struct http_client_ctx *client,
+		       uint8_t *data_buffer,
+		       size_t data_len)
+{
+#define MAX_URL_SNIPPET_LEN 64
+	static uint8_t url[MAX_URL_SNIPPET_LEN];
+	int len;
+
+	if (data_len == 0 && data_buffer == NULL) {
+		/* End of the URL */
+		LOG_INF("End of URL");
+		return 0;
+	}
+
+	len = MIN(sizeof(url), data_len);
+	memcpy(url, data_buffer, len);
+
+	LOG_INF("URL: %s", url);
+
+	return len;
+}
+
 #if defined(CONFIG_NET_SAMPLE_HTTP_SERVICE)
 static uint16_t test_http_service_port = CONFIG_NET_SAMPLE_HTTP_SERVER_SERVICE_PORT;
 HTTP_SERVICE_DEFINE(test_http_service, CONFIG_NET_CONFIG_MY_IPV4_ADDR, &test_http_service_port, 1,
@@ -29,6 +51,7 @@ struct http_resource_detail_static index_html_gz_resource_detail = {
 	.common = {
 			.type = HTTP_RESOURCE_TYPE_STATIC,
 			.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+			.url_handler = url_handler,
 		},
 	.static_data = index_html_gz,
 	.static_data_len = sizeof(index_html_gz),
@@ -82,6 +105,7 @@ struct http_resource_detail_dynamic dyn1_resource_detail = {
 		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
 		.bitmask_of_supported_http_methods =
 				BIT(HTTP_GET) | BIT(HTTP_POST),
+		.url_handler = url_handler,
 	},
 	.cb = dyn1_handler,
 	.data_buffer = recv_buffer,
@@ -121,6 +145,7 @@ static struct http_resource_detail_static index_html_gz_resource_detail_https = 
 	.common = {
 			.type = HTTP_RESOURCE_TYPE_STATIC,
 			.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+			.url_handler = url_handler,
 		},
 	.static_data = index_html_gz,
 	.static_data_len = sizeof(index_html_gz),
