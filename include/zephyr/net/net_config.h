@@ -16,6 +16,7 @@
 #include <zephyr/shell/shell.h>
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/ssh/keygen.h>
+#include <zephyr/net/ieee802154_mgmt.h>
 
 #ifdef __cplusplus
 extern "C" {
