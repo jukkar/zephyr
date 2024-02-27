@@ -35,9 +35,6 @@ static const char preface[] = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 static const char final_chunk[] = "0\r\n\r\n";
 static const char *crlf = &final_chunk[3];
 
-static struct arithmetic_result results[POST_REQUEST_STORAGE_LIMIT];
-static int results_count = 1;
-
 static const unsigned char settings_frame[9] = {
 	0x00, 0x00, 0x00,        /* Length */
 	0x04,                    /* Type: 0x04 - setting frames for config or acknowledgment */
@@ -884,20 +881,6 @@ not_supported:
 	return 0;
 }
 
-int handle_http1_rest_resource(struct http_resource_detail_static *static_detail,
-			       struct http_client_ctx *client)
-{
-	if (static_detail->common.bitmask_of_supported_http_methods & BIT(HTTP_POST)) {
-		char *json_start = strstr(client->buffer, "\r\n\r\n");
-
-		if (json_start) {
-			handle_post_request(json_start, client->fd);
-		}
-	}
-
-	return 0;
-}
-
 int handle_http1_rest_json_resource(struct http_resource_detail_static *static_detail,
 				    struct http_client_ctx *client)
 {
@@ -1043,9 +1026,6 @@ int handle_http1_request(struct http_server_ctx *server, struct http_client_ctx 
 				close_client_connection(server, client);
 				return ret;
 			}
-		} else if (detail->type == HTTP_RESOURCE_TYPE_REST) {
-			handle_http1_rest_resource((struct http_resource_detail_static *)detail,
-						   client);
 		} else if (detail->type == HTTP_RESOURCE_TYPE_REST_JSON) {
 			handle_http1_rest_json_resource(
 				(struct http_resource_detail_static *)detail, client);
@@ -1520,63 +1500,4 @@ bool settings_end_headers_flag(unsigned char flags)
 bool settings_end_stream_flag(unsigned char flags)
 {
 	return (flags & HTTP_SERVER_FLAG_END_STREAM) != 0;
-}
-
-/* FIXME: This function belongs to sample application and not here */
-void handle_post_request(char *request_payload, int client)
-{
-	const struct json_obj_descr arithmetic_result_descr[] = {
-		JSON_OBJ_DESCR_PRIM(struct arithmetic_result, x, JSON_TOK_NUMBER),
-		JSON_OBJ_DESCR_PRIM(struct arithmetic_result, y, JSON_TOK_NUMBER),
-		JSON_OBJ_DESCR_PRIM(struct arithmetic_result, result, JSON_TOK_NUMBER),
-	};
-	struct arithmetic_result ar;
-
-	int ret = json_obj_parse(request_payload, strlen(request_payload), arithmetic_result_descr,
-				 ARRAY_SIZE(arithmetic_result_descr), &ar);
-
-	if (ret < 0) {
-		return;
-	}
-
-	ar.result = ar.x + ar.y;
-
-	if (results_count < POST_REQUEST_STORAGE_LIMIT) {
-		results[results_count - 1] = ar;
-	}
-
-	char json_response[1024] = "[";
-
-	for (int i = 0; i < results_count; i++) {
-		char entry[128];
-
-		int len = json_obj_encode_buf(arithmetic_result_descr,
-					      ARRAY_SIZE(arithmetic_result_descr), &results[i],
-					      entry, sizeof(entry));
-
-		if (len < 0) {
-			return;
-		}
-
-		strcat(json_response, entry);
-
-		if (i != results_count - 1) {
-			strcat(json_response, ", ");
-		}
-	}
-
-	strcat(json_response, "]");
-
-	if (results_count < POST_REQUEST_STORAGE_LIMIT) {
-		results_count++;
-	}
-
-	char header[HTTP_SERVER_MAX_RESPONSE_SIZE];
-
-	snprintf(header, sizeof(header),
-		 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %zu\r\n\r\n",
-		 strlen(json_response));
-
-	sendall(client, header, strlen(header));
-	sendall(client, json_response, strlen(json_response));
 }
