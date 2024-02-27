@@ -23,6 +23,8 @@ LOG_MODULE_REGISTER(net_http_server, CONFIG_NET_HTTP_SERVER_LOG_LEVEL);
 #define HTTP_SERVER_MAX_URL_LENGTH    CONFIG_HTTP_SERVER_MAX_URL_LENGTH
 #define HTTP_SERVER_MAX_FRAME_SIZE    CONFIG_HTTP_SERVER_MAX_FRAME_SIZE
 
+#define TEMP_BUF_LEN 64
+
 #include <zephyr/kernel.h>
 #include <zephyr/net/net_ip.h>
 #include <zephyr/net/socket.h>
@@ -686,7 +688,6 @@ static int dynamic_get_req(struct http_resource_detail_dynamic *dynamic_detail,
 	/* offset tells from where the GET params start */
 	int ret, remaining, offset = dynamic_detail->common.path_len;
 	char *ptr;
-#define TEMP_BUF_LEN 64
 	char tmp[TEMP_BUF_LEN];
 
 	ret = sendall(client->fd, RESPONSE_TEMPLATE_CHUNKED,
@@ -755,7 +756,6 @@ static int dynamic_post_req(struct http_resource_detail_dynamic *dynamic_detail,
 	char *start = strstr(client->buffer, "\r\n\r\n");
 	int ret, remaining, offset = 0;
 	char *ptr;
-#define TEMP_BUF_LEN 64
 	char tmp[TEMP_BUF_LEN];
 
 	if (start == NULL) {
@@ -826,8 +826,6 @@ int handle_http1_dynamic_resource(struct http_resource_detail_dynamic *dynamic_d
 				  struct http_client_ctx *client)
 {
 	uint32_t user_method;
-#define TEMP_BUF_LEN 64
-	char tmp[TEMP_BUF_LEN];
 	int ret;
 
 	if (dynamic_detail->cb == NULL) {
