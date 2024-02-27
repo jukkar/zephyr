@@ -17,8 +17,6 @@
 
 struct http_resource_detail *get_resource_detail(const char *path, int *);
 int handle_http1_static_resource(struct http_resource_detail_static *static_detail, int client_fd);
-int handle_http1_rest_resource(struct http_resource_detail_static *static_detail,
-			       struct http_client_ctx *ctx_client);
 int handle_http2_static_resource(struct http_resource_detail_static *static_detail,
 				 struct http_frame *frame, int client_fd);
 void print_http_frames(struct http_client_ctx *ctx_client);
@@ -64,7 +62,6 @@ struct http_stream_ctx *find_http_stream_context(struct http_client_ctx *ctx_cli
 						 uint32_t stream_id);
 struct http_stream_ctx *allocate_http_stream_context(struct http_client_ctx *ctx_client,
 						     uint32_t stream_id);
-void handle_post_request(char *request_payload, int client);
 void encode_frame_header(uint8_t *buf, uint32_t payload_len, enum http_frame_type frame_type,
 			 uint8_t flags, uint32_t stream_id);
 int send_headers_frame(int socket_fd, uint8_t hpack_status, uint32_t stream_id);
