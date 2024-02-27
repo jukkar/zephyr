@@ -751,6 +751,80 @@ again:
 	return 0;
 }
 
+static int dynamic_post_req(struct http_resource_detail_dynamic *dynamic_detail,
+			    struct http_client_ctx *client)
+{
+	/* offset tells from where the POST params start */
+	char *start = strstr(client->buffer, "\r\n\r\n");
+	int ret, remaining, offset = 0;
+	char *ptr;
+#define TEMP_BUF_LEN 64
+	char tmp[TEMP_BUF_LEN];
+
+	if (start == NULL) {
+		return -ENOENT;
+	}
+
+	ret = sendall(client->fd, RESPONSE_TEMPLATE_CHUNKED,
+		      sizeof(RESPONSE_TEMPLATE_CHUNKED) - 1);
+	if (ret < 0) {
+		return ret;
+	}
+
+	start += 4; /* skip \r\n\r\n */
+	remaining = strlen(start);
+
+	/* Pass URL to the client */
+	while (1) {
+		int copy_len, send_len;
+
+		ptr = &start[offset];
+		copy_len = MIN(remaining, dynamic_detail->data_buffer_len);
+
+		memcpy(dynamic_detail->data_buffer, ptr, copy_len);
+
+again:
+		send_len = dynamic_detail->cb(client, dynamic_detail->data_buffer,
+					      copy_len, dynamic_detail->user_data);
+		if (send_len > 0) {
+			ret = snprintk(tmp, sizeof(tmp), "%x\r\n", send_len);
+			ret = sendall(client->fd, tmp, ret);
+			if (ret < 0) {
+				return ret;
+			}
+
+			ret = sendall(client->fd, dynamic_detail->data_buffer, send_len);
+			if (ret < 0) {
+				return ret;
+			}
+
+			(void)sendall(client->fd, crlf, 2);
+
+			offset += copy_len;
+			remaining -= copy_len;
+
+			/* If we have passed all the data to the application,
+			 * then just pass empty buffer to it.
+			 */
+			if (remaining == 0) {
+				copy_len = 0;
+				goto again;
+			}
+
+			continue;
+		}
+
+		break;
+	}
+
+	ret = sendall(client->fd, final_chunk, sizeof(final_chunk) - 1);
+	if (ret < 0) {
+		return ret;
+	}
+
+	return 0;
+}
+
 int handle_http1_dynamic_resource(struct http_resource_detail_dynamic *dynamic_detail,
 				  struct http_client_ctx *client)
 {
@@ -793,7 +867,7 @@ int handle_http1_dynamic_resource(struct http_resource_detail_dynamic *dynamic_d
 
 	case HTTP_POST:
 		if (user_method & BIT(HTTP_POST)) {
-			/* TBD */
+			return dynamic_post_req(dynamic_detail, client);
 		}
 
 		goto not_supported;
