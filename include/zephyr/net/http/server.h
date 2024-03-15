@@ -130,7 +130,7 @@ struct http_client_ctx {
 	enum http_server_state server_state;
 	struct http_frame current_frame;
 	struct http_stream_ctx streams[HTTP_SERVER_MAX_STREAMS];
-	struct http_parser_settings parserSettings;
+	struct http_parser_settings parser_settings;
 	struct http_parser parser;
 	unsigned char url_buffer[CONFIG_HTTP_SERVER_MAX_URL_LENGTH];
 };
