@@ -295,6 +295,18 @@ int http_server_start(struct http_server_ctx *ctx)
 				continue;
 			}
 
+			if (ctx->fds[i].revents & POLLHUP) {
+				if (i >= ctx->listen_fds) {
+					LOG_DBG("Client #%d has disconnected",
+						i - ctx->listen_fds);
+
+					client = &ctx->clients[i - ctx->listen_fds];
+					close_client_connection(ctx, client);
+				}
+
+				continue;
+			}
+
 			if (ctx->fds[i].revents & POLLERR) {
 				(void)zsock_getsockopt(ctx->fds[i].fd, SOL_SOCKET,
 						       SO_ERROR, &sock_error, &optlen);
@@ -310,18 +322,6 @@ int http_server_start(struct http_server_ctx *ctx)
 				LOG_ERR("Listening socket error, aborting.");
 				return -sock_error;
 
-			}
-
-			if (ctx->fds[i].revents & POLLHUP) {
-				if (i >= ctx->listen_fds) {
-					LOG_DBG("Client #%d has disconnected",
-						i - ctx->listen_fds);
-
-					client = &ctx->clients[i - ctx->listen_fds];
-					close_client_connection(ctx, client);
-				}
-
-				continue;
 			}
 
 			if (!(ctx->fds[i].revents & POLLIN)) {
@@ -362,27 +362,45 @@ int http_server_start(struct http_server_ctx *ctx)
 					LOG_DBG("No free slot found.");
 					zsock_close(new_socket);
 				}
-			} else {
-				client = &ctx->clients[i - ctx->listen_fds];
 
-				ret = zsock_recv(client->fd,
-						 client->buffer + client->offset,
-						 sizeof(client->buffer) - client->offset, 0);
-				if (ret <= 0) {
-					if (ret == 0) {
-						LOG_DBG("Connection closed by peer for client #%d",
-							i - ctx->listen_fds);
-					} else {
-						ret = -errno;
-						LOG_DBG("ERROR reading from socket (%d)", ret);
-					}
+				continue;
+			}
 
-					close_client_connection(ctx, client);
-					continue;
+			/* Client sock */
+			client = &ctx->clients[i - ctx->listen_fds];
+
+			ret = zsock_recv(client->fd, client->buffer + client->offset,
+					 sizeof(client->buffer) - client->offset, 0);
+			if (ret <= 0) {
+				if (ret == 0) {
+					LOG_DBG("Connection closed by peer for client #%d",
+						i - ctx->listen_fds);
+				} else {
+					ret = -errno;
+					LOG_DBG("ERROR reading from socket (%d)", ret);
 				}
 
-				client->offset += ret;
-				handle_http_request(ctx, client);
+				close_client_connection(ctx, client);
+				continue;
+			}
+
+			client->offset += ret;
+
+			ret = handle_http_request(ctx, client);
+			if (ret < 0 && ret != -EAGAIN) {
+				if (ret == -ENOTCONN) {
+					LOG_DBG("Client closed connection while handling request");
+				} else {
+					LOG_ERR("HTTP request handling error (%d)", ret);
+				}
+				close_client_connection(ctx, client);
+			} else if (client->offset == sizeof(client->buffer)) {
+				/* If the RX buffer is still full after parsing,
+				 * it means we won't be able to handle this request
+				 * with the current buffer size.
+				 */
+				LOG_ERR("RX buffer too small to handle request");
+				close_client_connection(ctx, client);
 			}
 		}
 	}
@@ -585,7 +603,6 @@ int enter_http_frame_headers_state(struct http_server_ctx *server,
 		stream = allocate_http_stream_context(client, frame->stream_identifier);
 		if (!stream) {
 			LOG_DBG("No available stream slots. Connection closed.");
-			close_client_connection(server, client);
 
 			return -ENOMEM;
 		}
@@ -643,6 +660,8 @@ int enter_http_http_done_state(struct http_server_ctx *server,
 {
 	client->server_state = HTTP_SERVER_DONE_STATE;
 
+	close_client_connection(server, client);
+
 	return 0;
 }
 
@@ -674,7 +693,6 @@ int handle_http_preface(struct http_server_ctx *server,
 			ret = sendall(client->fd, settings_frame,
 				      sizeof(settings_frame));
 			if (ret < 0) {
-				close_client_connection(server, client);
 				return ret;
 			}
 
@@ -1094,7 +1112,6 @@ static int handle_http1_to_http2_upgrade(struct http_server_ctx *server,
 	return 0;
 
 error:
-	close_client_connection(server, client);
 	return ret;
 }
 
@@ -1135,15 +1152,13 @@ int handle_http1_request(struct http_server_ctx *server, struct http_client_ctx 
 				(struct http_resource_detail_static *)detail,
 				client->fd);
 			if (ret < 0) {
-				close_client_connection(server, client);
 				return ret;
 			}
 		} else if (detail->type == HTTP_RESOURCE_TYPE_DYNAMIC) {
 			ret = handle_http1_dynamic_resource(
 				(struct http_resource_detail_dynamic *)detail,
 				client);
-			if (ret <= 0) {
-				close_client_connection(server, client);
+			if (ret < 0) {
 				return ret;
 			}
 		} else if (detail->type == HTTP_RESOURCE_TYPE_REST_JSON) {
@@ -1352,6 +1367,7 @@ int handle_http_frame_window_update(struct http_client_ctx *client)
 int handle_http_frame_goaway(struct http_server_ctx *server, struct http_client_ctx *client)
 {
 	struct http_frame *frame = &client->current_frame;
+	int bytes_consumed;
 
 	LOG_DBG("HTTP_SERVER_FRAME_GOAWAY");
 
@@ -1361,7 +1377,11 @@ int handle_http_frame_goaway(struct http_server_ctx *server, struct http_client_
 		return -EAGAIN;
 	}
 
-	close_client_connection(server, client);
+	bytes_consumed = client->current_frame.length;
+	client->offset -= bytes_consumed;
+	memmove(client->buffer, client->buffer + bytes_consumed, client->offset);
+
+	enter_http_http_done_state(server, client);
 
 	return 0;
 }
