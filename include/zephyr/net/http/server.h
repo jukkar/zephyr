@@ -157,4 +157,7 @@ int http_server_start(struct http_server_ctx *ctx);
 /* Stops the HTTP2 server */
 int http_server_stop(struct http_server_ctx *ctx);
 
+/* Cleanup the HTTP2 server */
+int http_server_cleanup(struct http_server_ctx *ctx);
+
 #endif
