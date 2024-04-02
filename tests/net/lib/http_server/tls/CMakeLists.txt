@@ -12,19 +12,19 @@ set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
 if (${CONFIG_TLS_CREDENTIALS})
   generate_inc_file_for_target(
     app
-    ${ZEPHYR_BASE}/samples/net/sockets/echo_server/src/ca.der
+    ${ZEPHYR_BASE}/samples/net/sockets/http_server/src/ca.der
     ${gen_dir}/ca.inc
   )
 
   generate_inc_file_for_target(
     app
-    ${ZEPHYR_BASE}/samples/net/sockets/echo_server/src/server.der
+    ${ZEPHYR_BASE}/samples/net/sockets/http_server/src/server.der
     ${gen_dir}/server.inc
   )
 
   generate_inc_file_for_target(
     app
-    ${ZEPHYR_BASE}/samples/net/sockets/echo_server/src/server_privkey.der
+    ${ZEPHYR_BASE}/samples/net/sockets/http_server/src/server_privkey.der
     ${gen_dir}/server_privkey.inc
   )
 
@@ -32,16 +32,20 @@ if (${CONFIG_TLS_CREDENTIALS})
   # since it seems to be the only one that is signed by a ca
   generate_inc_file_for_target(
     app
-    ${ZEPHYR_BASE}/samples/net/sockets/echo_server/src/server.der
+    ${ZEPHYR_BASE}/samples/net/sockets/http_server/src/server.der
     ${gen_dir}/client.inc
   )
 
   generate_inc_file_for_target(
     app
-    ${ZEPHYR_BASE}/samples/net/sockets/echo_server/src/server_privkey.der
+    ${ZEPHYR_BASE}/samples/net/sockets/http_server/src/server_privkey.der
     ${gen_dir}/client_privkey.inc
   )
 endif()
+
+set(source_file_index src/index.html)
+generate_inc_file_for_target(app ${source_file_index} ${gen_dir}/index.html.inc)
+generate_inc_file_for_target(app ${source_file_index} ${gen_dir}/index.html.gz.inc --gzip)
 
 FILE(GLOB app_sources src/main.c)
 target_sources(app PRIVATE ${app_sources})
