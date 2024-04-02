@@ -242,6 +242,23 @@ int accept_new_client(int server_fd)
 	return new_socket;
 }
 
+static int close_all_sockets(struct http_server_ctx *ctx)
+{
+	close(ctx->fds[0].fd); /* close eventfd */
+	ctx->fds[0].fd = -1;
+
+	for (int i = 1; i < ARRAY_SIZE(ctx->fds); i++) {
+		if (ctx->fds[i].fd < 0) {
+			continue;
+		}
+
+		zsock_close(ctx->fds[i].fd);
+		ctx->fds[i].fd = -1;
+	}
+
+	return 0;
+}
+
 int http_server_start(struct http_server_ctx *ctx)
 {
 	struct http_client_ctx *client;
@@ -270,7 +287,7 @@ int http_server_start(struct http_server_ctx *ctx)
 		if (ret == 1 && ctx->fds[0].revents) {
 			eventfd_read(ctx->fds[0].fd, &value);
 			LOG_DBG("Received stop event. exiting ..");
-			return 0;
+			goto closing;
 		}
 
 		for (i = 1; i < ARRAY_SIZE(ctx->fds); i++) {
@@ -371,6 +388,20 @@ int http_server_start(struct http_server_ctx *ctx)
 	}
 
 	return 0;
+
+closing:
+	/* Close all client connections and the server socket */
+	return close_all_sockets(ctx);
+}
+
+/* Close all client connections and the server socket + any other things needed */
+int http_server_cleanup(struct http_server_ctx *ctx)
+{
+	if (ctx == NULL) {
+		return -EINVAL;
+	}
+
+	return close_all_sockets(ctx);
 }
 
 int http_server_stop(struct http_server_ctx *ctx)
