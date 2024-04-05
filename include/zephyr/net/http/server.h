@@ -136,10 +136,11 @@ struct http_frame {
 
 struct http_client_ctx {
 	int fd;
-	int offset;
 	bool preface_sent;
 	bool has_upgrade_header;
 	unsigned char buffer[HTTP_SERVER_CLIENT_BUFFER_SIZE];
+	unsigned char *cursor; /**< Cursor indicating currently processed byte. */
+	size_t data_len; /**< Data left to process in the buffer. */
 	enum http_server_state server_state;
 	struct http_frame current_frame;
 	struct http_stream_ctx streams[HTTP_SERVER_MAX_STREAMS];
