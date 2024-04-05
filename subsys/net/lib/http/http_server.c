@@ -369,8 +369,8 @@ int http_server_start(struct http_server_ctx *ctx)
 			/* Client sock */
 			client = &ctx->clients[i - ctx->listen_fds];
 
-			ret = zsock_recv(client->fd, client->buffer + client->offset,
-					 sizeof(client->buffer) - client->offset, 0);
+			ret = zsock_recv(client->fd, client->buffer + client->data_len,
+					 sizeof(client->buffer) - client->data_len, 0);
 			if (ret <= 0) {
 				if (ret == 0) {
 					LOG_DBG("Connection closed by peer for client #%d",
@@ -384,7 +384,7 @@ int http_server_start(struct http_server_ctx *ctx)
 				continue;
 			}
 
-			client->offset += ret;
+			client->data_len += ret;
 
 			ret = handle_http_request(ctx, client);
 			if (ret < 0 && ret != -EAGAIN) {
@@ -394,7 +394,7 @@ int http_server_start(struct http_server_ctx *ctx)
 					LOG_ERR("HTTP request handling error (%d)", ret);
 				}
 				close_client_connection(ctx, client);
-			} else if (client->offset == sizeof(client->buffer)) {
+			} else if (client->data_len == sizeof(client->buffer)) {
 				/* If the RX buffer is still full after parsing,
 				 * it means we won't be able to handle this request
 				 * with the current buffer size.
@@ -453,7 +453,7 @@ void close_client_connection(struct http_server_ctx *server,
 void init_client_ctx(struct http_client_ctx *client, int new_socket)
 {
 	client->fd = new_socket;
-	client->offset = 0;
+	client->data_len = 0;
 	client->server_state = HTTP_SERVER_PREFACE_STATE;
 	client->has_upgrade_header = false;
 	client->preface_sent = false;
@@ -497,6 +497,8 @@ int handle_http_request(struct http_server_ctx *server, struct http_client_ctx *
 {
 	int ret = -EINVAL;
 
+	client->cursor = client->buffer;
+
 	do {
 		switch (client->server_state) {
 		case HTTP_SERVER_PREFACE_STATE:
@@ -536,9 +538,18 @@ int handle_http_request(struct http_server_ctx *server, struct http_client_ctx *
 			ret = handle_http_done(server, client);
 			break;
 		}
-	} while (ret == 0 && client->offset > 0);
+	} while (ret >= 0 && client->data_len > 0);
 
-	return ret;
+	if (ret < 0 && ret != -EAGAIN) {
+		return ret;
+	}
+
+	if (client->data_len > 0) {
+		/* Move any remaining data in the buffer. */
+		memmove(client->buffer, client->cursor, client->data_len);
+	}
+
+	return 0;
 }
 
 int handle_http_frame_header(struct http_server_ctx *server,
@@ -558,8 +569,8 @@ int handle_http_frame_header(struct http_server_ctx *server,
 
 	bytes_consumed = HTTP_SERVER_FRAME_HEADER_SIZE;
 
-	client->offset -= bytes_consumed;
-	memmove(client->buffer, client->buffer + bytes_consumed, client->offset);
+	client->cursor += bytes_consumed;
+	client->data_len -= bytes_consumed;
 
 	switch (client->current_frame.type) {
 	case HTTP_SERVER_HEADERS_FRAME:
@@ -670,21 +681,19 @@ int handle_http_preface(struct http_server_ctx *server,
 {
 	LOG_DBG("HTTP_SERVER_PREFACE_STATE.");
 
-	if (client->offset < sizeof(preface) - 1) {
+	if (client->data_len < sizeof(preface) - 1) {
 		/* We don't have full preface yet, get more data. */
 		return -EAGAIN;
 	}
 
-	if (strncmp(client->buffer, preface, sizeof(preface) - 1) != 0) {
+	if (strncmp(client->cursor, preface, sizeof(preface) - 1) != 0) {
 		client->server_state = HTTP_SERVER_REQUEST_STATE;
 	} else {
 		int ret;
 
 		client->server_state = HTTP_SERVER_FRAME_HEADER_STATE;
-		client->offset -= sizeof(preface) - 1;
-
-		memmove(client->buffer, client->buffer + sizeof(preface) - 1,
-			client->offset);
+		client->data_len -= sizeof(preface) - 1;
+		client->cursor += sizeof(preface) - 1;
 
 		/* HTTP/2 client preface received, send server preface
 		 * (settings frame).
@@ -698,7 +707,6 @@ int handle_http_preface(struct http_server_ctx *server,
 
 			client->preface_sent = true;
 		}
-
 	}
 
 	return 0;
@@ -1105,9 +1113,9 @@ static int handle_http1_to_http2_upgrade(struct http_server_ctx *server,
 		}
 	}
 
-	memset(client->buffer, 0, sizeof(client->buffer));
-	client->offset = 0;
 	client->server_state = HTTP_SERVER_PREFACE_STATE;
+	client->cursor += client->data_len;
+	client->data_len = 0;
 
 	return 0;
 
@@ -1117,8 +1125,7 @@ error:
 
 int handle_http1_request(struct http_server_ctx *server, struct http_client_ctx *client)
 {
-	int total_received = 0;
-	int offset = 0, ret, path_len = 0;
+	int ret, path_len = 0;
 	struct http_resource_detail *detail;
 
 	LOG_DBG("HTTP_SERVER_REQUEST");
@@ -1130,13 +1137,11 @@ int handle_http1_request(struct http_server_ctx *server, struct http_client_ctx 
 	client->parser_settings.on_url = on_url;
 
 	http_parser_execute(&client->parser, &client->parser_settings,
-			    client->buffer + offset, client->offset);
+			    client->cursor, client->data_len);
 
-	total_received += client->offset;
-	offset += client->offset;
-
-	if (offset >= HTTP_SERVER_MAX_RESPONSE_SIZE) {
-		offset = 0;
+	if (client->parser.http_errno != HPE_OK) {
+		LOG_ERR("HTTP/1 parsing error, %d", client->parser.http_errno);
+		return -EBADMSG;
 	}
 
 	if (client->has_upgrade_header) {
@@ -1174,11 +1179,15 @@ int handle_http1_request(struct http_server_ctx *server, struct http_client_ctx 
 		ret = sendall(client->fd, not_found_response, sizeof(not_found_response) - 1);
 		if (ret < 0) {
 			LOG_DBG("Cannot write to socket (%d)", ret);
+			return ret;
 		}
 	}
 
 	LOG_DBG("Connection closed client #%zd", ARRAY_INDEX(server->clients, client));
 	close_client_connection(server, client);
+
+	client->cursor += client->data_len;
+	client->data_len = 0;
 
 	return 0;
 }
@@ -1189,7 +1198,7 @@ int handle_http_done(struct http_server_ctx *server, struct http_client_ctx *cli
 
 	close_client_connection(server, client);
 
-	return -errno;
+	return -EAGAIN;
 }
 
 int handle_http2_static_resource(struct http_resource_detail_static *static_detail,
@@ -1231,7 +1240,7 @@ int handle_http_frame_headers(struct http_client_ctx *client)
 
 	print_http_frames(client);
 
-	if (client->offset < frame->length) {
+	if (client->data_len < frame->length) {
 		return -EAGAIN;
 	}
 
@@ -1272,8 +1281,8 @@ int handle_http_frame_headers(struct http_client_ctx *client)
 	client->server_state = HTTP_SERVER_FRAME_HEADER_STATE;
 
 	bytes_consumed = client->current_frame.length;
-	client->offset -= bytes_consumed;
-	memmove(client->buffer, client->buffer + bytes_consumed, client->offset);
+	client->data_len -= bytes_consumed;
+	client->cursor += bytes_consumed;
 
 	return 0;
 }
@@ -1287,13 +1296,13 @@ int handle_http_frame_priority(struct http_client_ctx *client)
 
 	print_http_frames(client);
 
-	if (client->offset < frame->length) {
+	if (client->data_len < frame->length) {
 		return -EAGAIN;
 	}
 
 	bytes_consumed = client->current_frame.length;
-	client->offset -= bytes_consumed;
-	memmove(client->buffer, client->buffer + bytes_consumed, client->offset);
+	client->data_len -= bytes_consumed;
+	client->cursor += bytes_consumed;
 
 	client->server_state = HTTP_SERVER_FRAME_HEADER_STATE;
 
@@ -1317,13 +1326,13 @@ int handle_http_frame_settings(struct http_client_ctx *client)
 
 	print_http_frames(client);
 
-	if (client->offset < frame->length) {
+	if (client->data_len < frame->length) {
 		return -EAGAIN;
 	}
 
 	bytes_consumed = client->current_frame.length;
-	client->offset -= bytes_consumed;
-	memmove(client->buffer, client->buffer + bytes_consumed, client->offset);
+	client->data_len -= bytes_consumed;
+	client->cursor += bytes_consumed;
 
 	if (!settings_ack_flag(frame->flags)) {
 		int ret;
@@ -1351,13 +1360,13 @@ int handle_http_frame_window_update(struct http_client_ctx *client)
 
 	/* TODO Implement flow control, for now just ignore. */
 
-	if (client->offset < frame->length) {
+	if (client->data_len < frame->length) {
 		return -EAGAIN;
 	}
 
 	bytes_consumed = client->current_frame.length;
-	client->offset -= bytes_consumed;
-	memmove(client->buffer, client->buffer + bytes_consumed, client->offset);
+	client->data_len -= bytes_consumed;
+	client->cursor += bytes_consumed;
 
 	client->server_state = HTTP_SERVER_FRAME_HEADER_STATE;
 
@@ -1373,13 +1382,13 @@ int handle_http_frame_goaway(struct http_server_ctx *server, struct http_client_
 
 	print_http_frames(client);
 
-	if (client->offset < frame->length) {
+	if (client->data_len < frame->length) {
 		return -EAGAIN;
 	}
 
 	bytes_consumed = client->current_frame.length;
-	client->offset -= bytes_consumed;
-	memmove(client->buffer, client->buffer + bytes_consumed, client->offset);
+	client->data_len -= bytes_consumed;
+	client->cursor += bytes_consumed;
 
 	enter_http_http_done_state(server, client);
 
@@ -1395,13 +1404,13 @@ int handle_http_frame_rst_frame(struct http_server_ctx *server, struct http_clie
 
 	print_http_frames(client);
 
-	if (client->offset < frame->length) {
+	if (client->data_len < frame->length) {
 		return -EAGAIN;
 	}
 
 	bytes_consumed = client->current_frame.length;
-	client->offset -= bytes_consumed;
-	memmove(client->buffer, client->buffer + bytes_consumed, client->offset);
+	client->data_len -= bytes_consumed;
+	client->cursor += bytes_consumed;
 
 	client->server_state = HTTP_SERVER_FRAME_HEADER_STATE;
 
@@ -1572,10 +1581,10 @@ void print_http_frames(struct http_client_ctx *client)
 	LOG_DBG("  %sFlags:%s %u", blue, reset, frame->flags);
 	LOG_DBG("  %sStream Identifier:%s %u", blue, reset, frame->stream_identifier);
 
-	if (client->offset > frame->length) {
+	if (client->data_len > frame->length) {
 		payload_received_length = frame->length;
 	} else {
-		payload_received_length = client->offset;
+		payload_received_length = client->data_len;
 	}
 
 	LOG_HEXDUMP_DBG(frame->payload, payload_received_length, "Payload");
@@ -1584,8 +1593,8 @@ void print_http_frames(struct http_client_ctx *client)
 
 int parse_http_frame_header(struct http_client_ctx *client)
 {
-	unsigned char *buffer = client->buffer;
-	unsigned long buffer_len = client->offset;
+	unsigned char *buffer = client->cursor;
+	unsigned long buffer_len = client->data_len;
 	struct http_frame *frame = &client->current_frame;
 
 	frame->length = 0;
