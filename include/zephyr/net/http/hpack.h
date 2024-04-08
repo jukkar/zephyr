@@ -11,32 +11,12 @@
 #ifndef ZEPHYR_INCLUDE_NET_HTTP_SERVER_HPACK_H_
 #define ZEPHYR_INCLUDE_NET_HTTP_SERVER_HPACK_H_
 
-#define HTTP_SERVER_HPACK_INDEXED_HEADER_FIELD       0x80
-#define HTTP_SERVER_HPACK_LITERAL_WITH_INDEXING      0x40
-#define HTTP_SERVER_HPACK_DYNAMIC_TABLE_SIZE_UPDATE  0x20
-
-#define HTTP_SERVER_HPACK_PATH_ROOT_SYMBOL 0x84
-#define HTTP_SERVER_HPACK_METHOD_GET_SYMBOL 0x82
-
-#define HTTP_SERVER_HPACK_METHOD 0
-#define HTTP_SERVER_HPACK_PATH   1
-
-#define _http_server_hpack_method_strlen 8
-#define _http_server_hpack_path_strlen 6
-
+#include <stddef.h>
 #include <stdint.h>
-
-#include <zephyr/net/http/server.h>
-
-#if defined(__linux__)
-
-#include <stdbool.h>
-
-#endif
 
 /**
  * @brief HTTP HPACK
- * @defgroup http_table HTTP HPACK
+ * @defgroup http_hpack HTTP HPACK
  * @ingroup networking
  * @{
  */
@@ -110,11 +90,49 @@ enum http_hpack_static_key {
 	HTTP_SERVER_HPACK_WWW_AUTHENTICATE = 61,
 };
 
-int http_hpack_table_add(struct http_client_ctx *ctx, uint32_t key, void *value);
-int http_hpack_table_get(struct http_client_ctx *ctx, uint32_t key, void **value);
-int http_hpack_table_remove(struct http_client_ctx *ctx, uint32_t key);
-int http_hpack_table_contains(struct http_client_ctx *ctx, uint32_t key);
-char *http_hpack_parse_header(struct http_client_ctx *ctx, int requested_data);
+/* TODO Kconfig */
+#define HTTP2_HEADER_FIELD_MAX_LEN 256
+
+/** HTTP2 header field representation. */
+struct http_hpack_header {
+	/** A pointer to the decoded header field name. */
+	const char *name;
+
+	/** A pointer to the decoded header field value. */
+	const char *value;
+
+	/** Length of the decoded header field name. */
+	size_t name_len;
+
+	/** Length of the decoded header field value. */
+	size_t value_len;
+};
+
+/** HTTP2 header field with decoding buffer. */
+struct http_hpack_header_buf {
+	/** A pointer to the decoded header field name. */
+	const char *name;
+
+	/** A pointer to the decoded header field value. */
+	const char *value;
+
+	/** Length of the decoded header field name. */
+	size_t name_len;
+
+	/** Length of the decoded header field value. */
+	size_t value_len;
+
+	/** Decoding buffer. Used when original header field used Huffman encoding. */
+	uint8_t buf[CONFIG_HTTP_SERVER_HUFFMAN_DECODE_BUFFER_SIZE];
+
+	/** Length of the data in the decoding buffer. */
+	size_t datalen;
+};
+
+int http_hpack_decode_header(const uint8_t *buf, size_t datalen,
+			     struct http_hpack_header_buf *header);
+int http_hpack_encode_header(const uint8_t *buf, size_t buflen,
+			     struct http_hpack_header *header);
 
 #ifdef __cplusplus
 }
