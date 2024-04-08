@@ -22,6 +22,7 @@
 #endif
 
 #include <zephyr/net/http/parser.h>
+#include <zephyr/net/http/hpack.h>
 
 #define HTTP_SERVER_CLIENT_BUFFER_SIZE CONFIG_HTTP_SERVER_CLIENT_BUFFER_SIZE
 #define HTTP_SERVER_MAX_SERVICES       CONFIG_HTTP_NUM_SERVICES
@@ -143,10 +144,12 @@ struct http_client_ctx {
 	size_t data_len; /**< Data left to process in the buffer. */
 	enum http_server_state server_state;
 	struct http_frame current_frame;
+	struct http_hpack_header_buf header_field;
 	struct http_stream_ctx streams[HTTP_SERVER_MAX_STREAMS];
 	struct http_parser_settings parser_settings;
 	struct http_parser parser;
 	unsigned char url_buffer[CONFIG_HTTP_SERVER_MAX_URL_LENGTH];
+	enum http_method method;
 };
 
 struct http_server_ctx {
