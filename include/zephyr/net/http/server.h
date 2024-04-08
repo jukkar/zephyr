@@ -39,6 +39,7 @@ struct http_resource_detail {
 	uint32_t bitmask_of_supported_http_methods;
 	enum http_resource_type type;
 	int path_len; /* length of the URL path */
+	const char *content_encoding;
 };
 BUILD_ASSERT(NUM_BITS(
 	     sizeof(((struct http_resource_detail *)0)->bitmask_of_supported_http_methods))
