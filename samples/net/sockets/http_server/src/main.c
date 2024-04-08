@@ -29,6 +29,7 @@ struct http_resource_detail_static index_html_gz_resource_detail = {
 	.common = {
 			.type = HTTP_RESOURCE_TYPE_STATIC,
 			.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+			.content_encoding = "gzip",
 		},
 	.static_data = index_html_gz,
 	.static_data_len = sizeof(index_html_gz),
@@ -122,6 +123,7 @@ static struct http_resource_detail_static index_html_gz_resource_detail_https = 
 	.common = {
 			.type = HTTP_RESOURCE_TYPE_STATIC,
 			.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+			.content_encoding = "gzip",
 		},
 	.static_data = index_html_gz,
 	.static_data_len = sizeof(index_html_gz),
