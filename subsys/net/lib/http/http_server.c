@@ -735,11 +735,13 @@ int handle_http1_static_resource(struct http_resource_detail_static *static_deta
 #define RESPONSE_TEMPLATE			\
 	"HTTP/1.1 200 OK\r\n"			\
 	"Content-Type: text/html\r\n"		\
-	"Content-Encoding: gzip\r\n"		\
-	"Content-Length: %d\r\n\r\n"
+	"Content-Length: %d\r\n"
 
 	/* Add couple of bytes to total response */
-	char http_response[sizeof(RESPONSE_TEMPLATE) + sizeof("xxxx")];
+	char http_response[sizeof(RESPONSE_TEMPLATE) +
+			   sizeof("Content-Encoding: 01234567890123456789\r\n") +
+			   sizeof("xxxx") +
+			   sizeof("\r\n")];
 	const char *data;
 	int len;
 	int ret;
@@ -748,7 +750,15 @@ int handle_http1_static_resource(struct http_resource_detail_static *static_deta
 		data = static_detail->static_data;
 		len = static_detail->static_data_len;
 
-		snprintk(http_response, sizeof(http_response), RESPONSE_TEMPLATE, len);
+		if (static_detail->common.content_encoding != NULL &&
+		    static_detail->common.content_encoding[0] != '\0') {
+			snprintk(http_response, sizeof(http_response),
+				 RESPONSE_TEMPLATE "Content-Encoding: %s\r\n\r\n",
+				 len, static_detail->common.content_encoding);
+		} else {
+			snprintk(http_response, sizeof(http_response),
+				 RESPONSE_TEMPLATE "\r\n", len);
+		}
 
 		ret = sendall(client_fd, http_response, strlen(http_response));
 		if (ret < 0) {
