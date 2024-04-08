@@ -1147,26 +1147,74 @@ int handle_http_frame_headers(struct http_client_ctx *client)
 {
 	struct http_frame *frame = &client->current_frame;
 	struct http_resource_detail *detail;
-	int bytes_consumed;
-	const char *method;
-	const char *path;
 	int ret, path_len;
 
 	LOG_DBG("HTTP_SERVER_FRAME_HEADERS");
 
 	print_http_frames(client);
 
+	/* TODO This is wrong, we can't expect full frame within the buffer */
 	if (client->data_len < frame->length) {
 		return -EAGAIN;
 	}
 
-	/* TODO This doesn't make much sense, the method is ignored, and
-	 * handle_http2_static_resource() hardcodes it as GET.
-	 */
-	method = http_hpack_parse_header(client, HTTP_SERVER_HPACK_METHOD);
-	path = http_hpack_parse_header(client, HTTP_SERVER_HPACK_PATH);
+	while (frame->length > 0) {
+		struct http_hpack_header_buf *header = &client->header_field;
 
-	detail = get_resource_detail(path, &path_len);
+		ret = http_hpack_decode_header(client->cursor, client->data_len,
+					       header);
+		if (ret == -EAGAIN) {
+			goto out;
+		}
+
+		if (ret <= 0) {
+			return -EBADMSG;
+		}
+
+		if (ret > client->current_frame.length) {
+			LOG_ERR("Protocol error, frame length exceeded");
+			return -EBADMSG;
+		}
+
+		client->current_frame.length -= ret;
+		client->cursor += ret;
+		client->data_len -= ret;
+
+		LOG_INF("Parsed header: %.*s %.*s", header->name_len,
+			header->name, header->value_len, header->value);
+
+		/* For now, we're only interested in method and URL. */
+		if (header->name_len == strlen(":method") &&
+		    memcmp(header->name, ":method", header->name_len) == 0) {
+			/* TODO Improve string to method conversion */
+			if (header->value_len == strlen("GET") &&
+			    memcmp(header->value, "GET", header->value_len) == 0) {
+				client->method = HTTP_GET;
+			} else if (header->value_len == strlen("POST") &&
+				   memcmp(header->value, "POST", header->value_len) == 0) {
+				client->method = HTTP_POST;
+			} else {
+				/* Unknown method */
+				return -EBADMSG;
+			}
+		} else if (header->name_len == strlen(":path") &&
+			   memcmp(header->name, ":path", header->name_len) == 0) {
+			if (header->value_len > sizeof(client->url_buffer) - 1) {
+				/* URL too long to handle */
+				return -ENOBUFS;
+			}
+
+			memcpy(client->url_buffer, header->value, header->value_len);
+			client->url_buffer[header->value_len] = '\0';
+		} else {
+			/* Just ignore for now. */
+		}
+	}
+
+	/* TODO This should be done only after headers frame is complete, i. e.
+	 * current_frame.length == 0.
+	 */
+	detail = get_resource_detail(client->url_buffer, &path_len);
 	if (detail != NULL) {
 		detail->path_len = path_len;
 
@@ -1196,10 +1244,7 @@ int handle_http_frame_headers(struct http_client_ctx *client)
 
 	client->server_state = HTTP_SERVER_FRAME_HEADER_STATE;
 
-	bytes_consumed = client->current_frame.length;
-	client->data_len -= bytes_consumed;
-	client->cursor += bytes_consumed;
-
+out:
 	return 0;
 }
 

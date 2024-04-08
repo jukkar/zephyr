@@ -74,6 +74,15 @@ config HTTP_SERVER_CLIENT_BUFFER_SIZE
 	help
 	  This setting determines the buffer size for each client.
 
+config HTTP_SERVER_HUFFMAN_DECODE_BUFFER_SIZE
+	int "Size of the buffer used for decoding Huffman-encoded strings"
+	default 256
+	range 64 1024
+	help
+	  Size of the buffer used for decoding Huffman-encoded strings when
+	  processing HPACK compressed headers. This effectively limits the
+	  maximum length of an individual HTTP header supported.
+
 config HTTP_SERVER_MAX_RESPONSE_SIZE
 	int "Maximum HTTP Response Size"
 	default 128
