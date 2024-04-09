@@ -176,24 +176,25 @@ static int hpack_huffman_decode(const uint8_t *encoded_buf, size_t encoded_len,
 				struct http_hpack_header_buf *header)
 {
 	uint8_t *buf = header->buf + header->datalen;
-	/* size_t buflen = sizeof(header->buf) - header->datalen; */
-	size_t decoded_len = 0;
+	size_t buflen = sizeof(header->buf) - header->datalen;
+	int ret;
 
 	NET_ASSERT(type == HPACK_HEADER_NAME || type == HPACK_HEADER_VALUE);
 
-	/* TODO Implement Huffman decoding, for now just assign an empty string. */
-	decoded_len = strlen("<needs huffman>");
-	memcpy(buf, "<needs huffman>", decoded_len);
+	ret = http_hpack_huffman_decode(encoded_buf, encoded_len, buf, buflen);
+	if (ret < 0) {
+		return ret;
+	}
 
 	if (type == HPACK_HEADER_NAME) {
 		header->name = buf;
-		header->name_len = decoded_len;
+		header->name_len = ret;
 	} else if (type == HPACK_HEADER_VALUE) {
 		header->value = buf;
-		header->value_len = decoded_len;
+		header->value_len = ret;
 	}
 
-	header->datalen += decoded_len;
+	header->datalen += ret;
 
 	return 0;
 }
