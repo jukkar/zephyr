@@ -129,6 +129,8 @@ struct http_hpack_header_buf {
 	size_t datalen;
 };
 
+int http_hpack_huffman_decode(const uint8_t *encoded_buf, size_t encoded_len,
+			      uint8_t *buf, size_t buflen);
 int http_hpack_decode_header(const uint8_t *buf, size_t datalen,
 			     struct http_hpack_header_buf *header);
 int http_hpack_encode_header(const uint8_t *buf, size_t buflen,
