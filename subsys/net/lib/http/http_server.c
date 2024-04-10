@@ -712,19 +712,37 @@ int handle_http_preface(struct http_server_ctx *server,
 	return 0;
 }
 
+/* Compare two strings where the terminator is either "\0" or "?" */
+static int compare_strings(const char *s1, const char *s2)
+{
+	while ((*s1 && *s2) && (*s1 == *s2) && (*s1 != '?')) {
+		s1++;
+		s2++;
+	}
+
+	/* Check if both strings have reached their terminators or '?' */
+	if ((*s1 == '\0' || *s1 == '?') && (*s2 == '\0' || *s2 == '?')) {
+		return 0; /* Strings are equal */
+	}
+
+	return 1; /* Strings are not equal */
+}
+
 struct http_resource_detail *get_resource_detail(const char *path,
 						 int *path_len)
 {
 	HTTP_SERVICE_FOREACH(service) {
 		HTTP_SERVICE_FOREACH_RESOURCE(service, resource) {
-			int len = strlen(resource->resource);
+			if (compare_strings(path, resource->resource) == 0) {
+				NET_DBG("Got match for %s", resource->resource);
 
-			if (strncmp(path, resource->resource, len) == 0) {
-				*path_len = len;
+				*path_len = strlen(resource->resource);
 				return resource->detail;
 			}
 		}
 	}
+
+	NET_DBG("No match for %s", path);
 
 	return NULL;
 }
