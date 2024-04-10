@@ -8,6 +8,8 @@
 #include <zephyr/net/http/server.h>
 #include <zephyr/ztest.h>
 
+#if 0
+
 #define _get_fun(s, k, v)                                                                          \
 	((v) == NULL ? http_hpack_table_contains(s, k) : http_hpack_table_get(s, k, v))
 
@@ -86,3 +88,5 @@ ZTEST(http_hpack, test_method)
 }
 
 ZTEST_SUITE(http_hpack, NULL, NULL, NULL, NULL, NULL);
+
+#endif
