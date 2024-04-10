@@ -28,24 +28,28 @@ static K_THREAD_STACK_DEFINE(server_stack, STACK_SIZE);
 static struct k_thread server_thread;
 
 /* Magic, SETTINGS[0], HEADERS[1]: GET /, HEADERS[3]: GET /index.html, SETTINGS[0], GOAWAY[0]*/
-static const unsigned char Frame[] = {
-	0x50, 0x52, 0x49, 0x20, 0x2a, 0x20, 0x48, 0x54,
-	0x54, 0x50, 0x2f, 0x32, 0x2e, 0x30, 0x0d, 0x0a,
-	0x0d, 0x0a, 0x53, 0x4d, 0x0d, 0x0a, 0x0d, 0x0a,
-	0x00, 0x00, 0x0c, 0x04, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x64, 0x00,
-	0x04, 0x00, 0x00, 0xff, 0xff, 0x00, 0x00, 0x21,
-	0x01, 0x05, 0x00, 0x00, 0x00, 0x01, 0x82, 0x84,
-	0x86, 0x41, 0x8a, 0x0b, 0xe2, 0x5c, 0x0b, 0x89,
-	0x70, 0xdc, 0x78, 0x0f, 0x03, 0x53, 0x03, 0x2a,
-	0x2f, 0x2a, 0x90, 0x7a, 0x8a, 0xaa, 0x69, 0xd2,
-	0x9a, 0xc4, 0xc0, 0x57, 0x68, 0x0b, 0x83, 0x00,
-	0x00, 0x07, 0x01, 0x05, 0x00, 0x00, 0x00, 0x03,
-	0x82, 0x85, 0x86, 0xc0, 0xbf, 0x90, 0xbe, 0x00,
-	0x00, 0x00, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00,
+static const unsigned char frame[] = {
+	/* Magic */
+	0x50, 0x52, 0x49, 0x20, 0x2a, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2f, 0x32,
+	0x2e, 0x30, 0x0d, 0x0a, 0x0d, 0x0a, 0x53, 0x4d, 0x0d, 0x0a, 0x0d, 0x0a,
+	/* SETTINGS[0] */
+	0x00, 0x00, 0x0c, 0x04, 0x00, 0x00, 0x00, 0x00,	0x00,
+	0x00, 0x03, 0x00, 0x00, 0x00, 0x64, 0x00, 0x04, 0x00, 0x00, 0xff, 0xff,
+	/* HEADERS[1]: GET / */
+	0x00, 0x00, 0x21, 0x01, 0x05, 0x00, 0x00, 0x00, 0x01,
+	0x82, 0x84, 0x86, 0x41, 0x8a, 0x0b, 0xe2, 0x5c, 0x0b, 0x89, 0x70, 0xdc,
+	0x78, 0x0f, 0x03, 0x53, 0x03, 0x2a, 0x2f, 0x2a, 0x90, 0x7a, 0x8a, 0xaa,
+	0x69, 0xd2, 0x9a, 0xc4, 0xc0, 0x57, 0x68, 0x0b, 0x83,
+	/* HEADERS[3]: GET /index.html */
+	0x00, 0x00, 0x21, 0x01, 0x05, 0x00, 0x00, 0x00, 0x03,
+	0x82, 0x85, 0x86, 0x41, 0x8a, 0x0b, 0xe2, 0x5c, 0x0b, 0x89, 0x70, 0xdc,
+	0x78, 0x0f, 0x03, 0x53, 0x03, 0x2a, 0x2f, 0x2a, 0x90, 0x7a, 0x8a, 0xaa,
+	0x69, 0xd2, 0x9a, 0xc4, 0xc0, 0x57, 0x68, 0x0b, 0x83,
+	/* SETTINGS[0] */
+	0x00, 0x00, 0x00, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00,
+	/*  GOAWAY[0] */
 	0x00, 0x00, 0x08, 0x07, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
 
 static uint16_t test_http_service_port = SERVER_PORT;
@@ -88,6 +92,7 @@ static void test_streams(void)
 	static struct http_server_ctx ctx;
 	unsigned int length;
 	uint8_t type;
+	size_t offset;
 	uint32_t stream_id;
 
 	k_sem_init(&server_sem, 0, 1);
@@ -125,12 +130,31 @@ static void test_streams(void)
 	ret = zsock_connect(client_fd, (struct sockaddr *)&sa, sizeof(sa));
 	zassert_not_equal(ret, -1, "failed to connect (%d)", errno);
 
-	ret = zsock_send(client_fd, Frame, sizeof(Frame), 0);
+	ret = zsock_send(client_fd, frame, sizeof(frame), 0);
 	zassert_not_equal(ret, -1, "send() failed (%d)", errno);
 
 	memset(buf, 0, sizeof(buf));
-	ret = zsock_recv(client_fd, buf, sizeof(buf), 0);
-	zassert_not_equal(ret, -1, "recv() failed (%d)", errno);
+	offset = 0;
+	do {
+		ret = zsock_recv(client_fd, buf + offset, sizeof(buf) - offset, 0);
+		zassert_not_equal(ret, -1, "recv() failed (%d)", errno);
+
+		offset += ret;
+	} while (ret > 0);
+
+	/* Settings frame is expected twice (server settings + settings ACK) */
+	length = (buf[0] << 16) | (buf[1] << 8) | buf[2];
+	length += 9;
+	type = buf[3];
+	stream_id = (buf[5] << 24) | (buf[6] << 16) | (buf[7] << 8) | buf[8];
+	stream_id &= 0x7fffffff;
+
+	zassert_true((type == 0x4 && stream_id == 0),
+		     "Expected a SETTINGS frame with stream ID 0");
+	zassert_true(offset > length, "Parsing error, buffer exceeded");
+
+	offset -= length;
+	memmove(buf, buf + length, offset);
 
 	length = (buf[0] << 16) | (buf[1] << 8) | buf[2];
 	length += 9;
@@ -138,10 +162,12 @@ static void test_streams(void)
 	stream_id = (buf[5] << 24) | (buf[6] << 16) | (buf[7] << 8) | buf[8];
 	stream_id &= 0x7fffffff;
 
-	zassert_true((type == 0x4 && stream_id == 0), "Expected a SETTINGS frame with stream ID 0");
+	zassert_true((type == 0x4 && stream_id == 0),
+		     "Expected a SETTINGS frame with stream ID 0");
+	zassert_true(offset > length, "Parsing error, buffer exceeded");
 
-	ret -= length;
-	memmove(buf, buf + length, ret);
+	offset -= length;
+	memmove(buf, buf + length, offset);
 
 	length = (buf[0] << 16) | (buf[1] << 8) | buf[2];
 	length += 9;
@@ -149,10 +175,12 @@ static void test_streams(void)
 	stream_id = (buf[5] << 24) | (buf[6] << 16) | (buf[7] << 8) | buf[8];
 	stream_id &= 0x7fffffff;
 
-	zassert_true((type == 0x1 && stream_id == 1), "Expected a HEADERS frame with stream ID 1");
+	zassert_true((type == 0x1 && stream_id == 1),
+		     "Expected a HEADERS frame with stream ID 1, got %d", stream_id);
+	zassert_true(offset > length, "Parsing error, buffer exceeded");
 
-	ret -= length;
-	memmove(buf, buf + length, ret);
+	offset -= length;
+	memmove(buf, buf + length, offset);
 
 	length = (buf[0] << 16) | (buf[1] << 8) | buf[2];
 	length += 9;
@@ -161,21 +189,12 @@ static void test_streams(void)
 	stream_id &= 0x7fffffff;
 	buf[9] = 0;
 
-	zassert_true((type == 0x0 && stream_id == 1), "Expected a DATA frame with stream ID 1");
+	zassert_true((type == 0x0 && stream_id == 1),
+		     "Expected a DATA frame with stream ID 1, got %d", stream_id);
+	zassert_true(offset > length, "Parsing error, buffer exceeded");
 
-	ret -= length;
-	memmove(buf, buf + length, ret);
-
-	length = (buf[0] << 16) | (buf[1] << 8) | buf[2];
-	length += 9;
-	type = buf[3];
-	stream_id = (buf[5] << 24) | (buf[6] << 16) | (buf[7] << 8) | buf[8];
-	stream_id &= 0x7fffffff;
-
-	zassert_true((type == 0x1 && stream_id == 3), "Expected a HEADERS frame with stream ID 3");
-
-	ret -= length;
-	memmove(buf, buf + length, ret);
+	offset -= length;
+	memmove(buf, buf + length, offset);
 
 	length = (buf[0] << 16) | (buf[1] << 8) | buf[2];
 	length += 9;
@@ -183,7 +202,21 @@ static void test_streams(void)
 	stream_id = (buf[5] << 24) | (buf[6] << 16) | (buf[7] << 8) | buf[8];
 	stream_id &= 0x7fffffff;
 
-	zassert_true((type == 0x0 && stream_id == 3), "Expected a DATA frame with stream ID 3");
+	zassert_true((type == 0x1 && stream_id == 3),
+		     "Expected a HEADERS frame with stream ID 3");
+	zassert_true(offset >= length, "Parsing error, buffer exceeded");
+
+	offset -= length;
+	memmove(buf, buf + length, offset);
+
+	length = (buf[0] << 16) | (buf[1] << 8) | buf[2];
+	length += 9;
+	type = buf[3];
+	stream_id = (buf[5] << 24) | (buf[6] << 16) | (buf[7] << 8) | buf[8];
+	stream_id &= 0x7fffffff;
+
+	zassert_true((type == 0x0 && stream_id == 3),
+		     "Expected a DATA frame with stream ID 3");
 
 	ret = zsock_close(client_fd);
 	zassert_not_equal(-1, ret, "close() failed on the client fd (%d)", errno);
@@ -275,7 +308,7 @@ static void test_common(int test_support)
 
 	} else if (test_support == SUPPORT_HTTP_SERVER_UPGRADE) {
 
-		ret = zsock_send(client_fd, Frame, sizeof(Frame), 0);
+		ret = zsock_send(client_fd, frame, sizeof(frame), 0);
 		zassert_not_equal(ret, -1, "send() failed (%d)", errno);
 
 		memset(buf, 0, sizeof(buf));
@@ -434,9 +467,11 @@ ZTEST(server_function_tests, test_parse_http_frames)
 	memcpy(ctx_client1.buffer, buffer1, sizeof(buffer1));
 	memcpy(ctx_client2.buffer, buffer2, sizeof(buffer2));
 
-	ctx_client1.offset = ARRAY_SIZE(buffer1);
+	ctx_client1.cursor = ctx_client1.buffer;
+	ctx_client1.data_len = ARRAY_SIZE(buffer1);
 
-	ctx_client2.offset = ARRAY_SIZE(buffer2);
+	ctx_client2.cursor = ctx_client2.buffer;
+	ctx_client2.data_len = ARRAY_SIZE(buffer2);
 
 	/* Test: Buffer with the first frame */
 	int parser1 = parse_http_frame_header(&ctx_client1);
