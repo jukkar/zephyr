@@ -93,21 +93,6 @@ enum http_hpack_static_key {
 /* TODO Kconfig */
 #define HTTP2_HEADER_FIELD_MAX_LEN 256
 
-/** HTTP2 header field representation. */
-struct http_hpack_header {
-	/** A pointer to the decoded header field name. */
-	const char *name;
-
-	/** A pointer to the decoded header field value. */
-	const char *value;
-
-	/** Length of the decoded header field name. */
-	size_t name_len;
-
-	/** Length of the decoded header field value. */
-	size_t value_len;
-};
-
 /** HTTP2 header field with decoding buffer. */
 struct http_hpack_header_buf {
 	/** A pointer to the decoded header field name. */
@@ -122,7 +107,7 @@ struct http_hpack_header_buf {
 	/** Length of the decoded header field value. */
 	size_t value_len;
 
-	/** Decoding buffer. Used when original header field used Huffman encoding. */
+	/** Encoding/Decoding buffer. Used with Huffman encoding/decoding. */
 	uint8_t buf[CONFIG_HTTP_SERVER_HUFFMAN_DECODE_BUFFER_SIZE];
 
 	/** Length of the data in the decoding buffer. */
@@ -131,10 +116,12 @@ struct http_hpack_header_buf {
 
 int http_hpack_huffman_decode(const uint8_t *encoded_buf, size_t encoded_len,
 			      uint8_t *buf, size_t buflen);
+int http_hpack_huffman_encode(const uint8_t *str, size_t str_len,
+			      uint8_t *buf, size_t buflen);
 int http_hpack_decode_header(const uint8_t *buf, size_t datalen,
 			     struct http_hpack_header_buf *header);
-int http_hpack_encode_header(const uint8_t *buf, size_t buflen,
-			     struct http_hpack_header *header);
+int http_hpack_encode_header(uint8_t *buf, size_t buflen,
+			     struct http_hpack_header_buf *header);
 
 #ifdef __cplusplus
 }
