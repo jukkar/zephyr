@@ -101,6 +101,42 @@ const struct hpack_table_entry *http_hpack_table_get(uint32_t key)
 	return &http_hpack_table_static[key];
 }
 
+static int http_hpack_find_index(struct http_hpack_header_buf *header,
+				 bool *name_only)
+{
+	const struct hpack_table_entry *entry;
+	int candidate = -1;
+
+	for (int i = HTTP_SERVER_HPACK_AUTHORITY;
+	     i <= HTTP_SERVER_HPACK_WWW_AUTHENTICATE; i++) {
+		entry = &http_hpack_table_static[i];
+
+		if (entry->name != NULL &&
+		    strlen(entry->name) == header->name_len &&
+		    memcmp(entry->name, header->name, header->name_len) == 0) {
+			if (entry->value != NULL &&
+			    strlen(entry->value) == header->value_len &&
+			    memcmp(entry->value, header->value, header->value_len) == 0) {
+				/* Got exact match. */
+				*name_only = false;
+				return i;
+			}
+
+			if (candidate < 0) {
+				candidate = i;
+			}
+		}
+	}
+
+	if (candidate > 0) {
+		/* Matched name only. */
+		*name_only = true;
+		return candidate;
+	}
+
+	return -ENOENT;
+}
+
 #define HPACK_INTEGER_CONTINUATION_FLAG            0x80
 #define HPACK_STRING_HUFFMAN_FLAG                  0x80
 #define HPACK_STRING_PREFIX_LEN                    7
@@ -373,10 +409,14 @@ static int hpack_handle_dynamic_size_update(const uint8_t *buf, size_t datalen)
 }
 
 int http_hpack_decode_header(const uint8_t *buf, size_t datalen,
-			    struct http_hpack_header_buf *header)
+			     struct http_hpack_header_buf *header)
 {
 	uint8_t prefix = *buf;
 	int ret;
+
+	if (buf == NULL || header == NULL) {
+		return -EINVAL;
+	}
 
 	if (datalen == 0) {
 		return -EAGAIN;
@@ -402,8 +442,190 @@ int http_hpack_decode_header(const uint8_t *buf, size_t datalen,
 	return ret;
 }
 
-int http_hpack_encode_header(const uint8_t *buf, size_t buflen,
-			     struct http_hpack_header *header)
+static int hpack_integer_encode(uint8_t *buf, size_t buflen, int value,
+				uint8_t prefix, uint8_t n)
 {
-	return -ENOTSUP;
+	uint8_t limit = (1 << n) - 1;
+	int len = 0;
+
+	if (buflen == 0) {
+		return -ENOBUFS;
+	}
+
+	/* Based on RFC7541, ch 5.1. */
+	if (value  < limit) {
+		*buf = prefix | (uint8_t)value;
+
+		return 1;
+	}
+
+	*buf++ = prefix | limit;
+	len++;
+	value -= limit;
+
+	while (value >= 128) {
+		if (len >= buflen) {
+			return -ENOBUFS;
+		}
+
+		*buf = (uint8_t)((value % 128) + 128);
+		len++;
+		value /= 128;
+	}
+
+	if (len >= buflen) {
+		return -ENOBUFS;
+	}
+
+	*buf = (uint8_t)value;
+	len++;
+
+	return len;
+}
+
+static int hpack_string_encode(uint8_t *buf, size_t buflen,
+			       enum hpack_string_type type,
+			       struct http_hpack_header_buf *header)
+{
+	int ret, len = 0;
+	const char *str;
+	size_t str_len;
+	uint8_t prefix = 0;
+
+	if (type == HPACK_HEADER_NAME) {
+		str = header->name;
+		str_len = header->name_len;
+	} else {
+		str = header->value;
+		str_len = header->value_len;
+	}
+
+	/* Try to encode string into intermediate buffer. */
+	ret = http_hpack_huffman_encode(str, str_len, header->buf,
+					sizeof(header->buf));
+	if (ret > 0 && ret < str_len) {
+		/* Use Huffman encoded string only if smaller than the original. */
+		str = header->buf;
+		str_len = ret;
+		prefix = HPACK_STRING_HUFFMAN_FLAG;
+	}
+
+	/* Encode string length. */
+	ret = hpack_integer_encode(buf, buflen, str_len, prefix,
+				   HPACK_STRING_PREFIX_LEN);
+	if (ret < 0) {
+		return ret;
+	}
+
+	buf += ret;
+	buflen -= ret;
+	len += ret;
+
+	/* Copy string. */
+	if (str_len > buflen) {
+		return -ENOBUFS;
+	}
+
+	memcpy(buf, str, str_len);
+	len += str_len;
+
+	return len;
+}
+
+static int hpack_encode_literal(uint8_t *buf, size_t buflen,
+				struct http_hpack_header_buf *header)
+{
+	int ret, len = 0;
+
+	ret = hpack_integer_encode(buf, buflen, 0,
+				   HPACK_PREFIX_LITERAL_NEVER_INDEXED,
+				   HPACK_PREFIX_LEN_LITERAL_NEVER_INDEXED);
+	if (ret < 0) {
+		return ret;
+	}
+
+	buf += ret;
+	buflen -= ret;
+	len += ret;
+
+	ret = hpack_string_encode(buf, buflen, HPACK_HEADER_NAME, header);
+	if (ret < 0) {
+		return ret;
+	}
+
+	buf += ret;
+	buflen -= ret;
+	len += ret;
+
+	ret = hpack_string_encode(buf, buflen, HPACK_HEADER_VALUE, header);
+	if (ret < 0) {
+		return ret;
+	}
+
+	len += ret;
+
+	return len;
+}
+
+static int hpack_encode_literal_value(uint8_t *buf, size_t buflen, int index,
+				      struct http_hpack_header_buf *header)
+{
+	int ret, len = 0;
+
+	ret = hpack_integer_encode(buf, buflen, index,
+				   HPACK_PREFIX_LITERAL_NEVER_INDEXED,
+				   HPACK_PREFIX_LEN_LITERAL_NEVER_INDEXED);
+	if (ret < 0) {
+		return ret;
+	}
+
+	buf += ret;
+	buflen -= ret;
+	len += ret;
+
+	ret = hpack_string_encode(buf, buflen, HPACK_HEADER_VALUE, header);
+	if (ret < 0) {
+		return ret;
+	}
+
+	len += ret;
+
+	return len;
+}
+
+static int hpack_encode_indexed(uint8_t *buf, size_t buflen, int index)
+{
+	return hpack_integer_encode(buf, buflen, index, HPACK_PREFIX_INDEXED,
+				    HPACK_PREFIX_LEN_INDEXED);
+}
+
+int http_hpack_encode_header(uint8_t *buf, size_t buflen,
+			     struct http_hpack_header_buf *header)
+{
+	int ret, len = 0;
+	bool name_only;
+
+	if (buf == NULL || header == NULL ||
+	    header->name == NULL || header->name_len == 0 ||
+	    header->value == NULL || header->value_len == 0) {
+		return -EINVAL;
+	}
+
+	if (buflen == 0) {
+		return -ENOBUFS;
+	}
+
+	ret = http_hpack_find_index(header, &name_only);
+	if (ret < 0) {
+		/* All literal */
+		len = hpack_encode_literal(buf, buflen, header);
+	} else if (name_only) {
+		/* Literal value */
+		len = hpack_encode_literal_value(buf, buflen, ret, header);
+	} else {
+		/* Indexed */
+		len = hpack_encode_indexed(buf, buflen, ret);
+	}
+
+	return len;
 }

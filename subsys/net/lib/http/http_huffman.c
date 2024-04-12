@@ -403,3 +403,9 @@ int http_hpack_huffman_decode(const uint8_t *encoded_buf, size_t encoded_len,
 
 	return decoded_len;
 }
+
+int http_hpack_huffman_encode(const uint8_t *str, size_t str_len,
+			      uint8_t *buf, size_t buflen)
+{
+	return str_len;
+}
