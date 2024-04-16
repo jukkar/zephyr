@@ -1025,8 +1025,8 @@ static int send_http2_404(struct http_client_ctx *client,
 {
 	int ret;
 
-	ret = send_headers_frame(client->fd, HTTP_SERVER_HPACK_STATUS_4O4,
-				 frame->stream_identifier, "gzip");
+	ret = send_headers_frame(client, HTTP_404_NOT_FOUND,
+				 frame->stream_identifier, NULL);
 	if (ret < 0) {
 		LOG_DBG("Cannot write to socket (%d)", ret);
 		return ret;
@@ -1085,7 +1085,7 @@ static int handle_http1_to_http2_upgrade(struct http_server_ctx *server,
 		if (detail->type == HTTP_RESOURCE_TYPE_STATIC) {
 			ret = handle_http2_static_resource(
 				(struct http_resource_detail_static *)detail,
-				&frame, client->fd);
+				&frame, client);
 			if (ret < 0) {
 				goto error;
 			}
@@ -1187,7 +1187,7 @@ int handle_http_done(struct http_server_ctx *server, struct http_client_ctx *cli
 }
 
 int handle_http2_static_resource(struct http_resource_detail_static *static_detail,
-				 struct http_frame *frame, int client_fd)
+				 struct http_frame *frame, struct http_client_ctx *client)
 {
 	const char *content_200;
 	size_t content_len;
@@ -1200,22 +1200,21 @@ int handle_http2_static_resource(struct http_resource_detail_static *static_deta
 	content_200 = static_detail->static_data;
 	content_len = static_detail->static_data_len;
 
-	ret = send_headers_frame(client_fd, HTTP_SERVER_HPACK_STATUS_2OO,
-				 frame->stream_identifier,
+	ret = send_headers_frame(client, HTTP_200_OK, frame->stream_identifier,
 				 static_detail->common.content_encoding);
 	if (ret < 0) {
 		LOG_DBG("Cannot write to socket (%d)", ret);
 		goto out;
 	}
 
-	ret = send_data_frame(client_fd, content_200, content_len,
+	ret = send_data_frame(client->fd, content_200, content_len,
 			      frame->stream_identifier, 0);
 	if (ret < 0) {
 		LOG_DBG("Cannot write to socket (%d)", ret);
 		goto out;
 	}
 
-	ret = send_data_frame(client_fd, NULL, 0,
+	ret = send_data_frame(client->fd, NULL, 0,
 			      frame->stream_identifier,
 			      HTTP_SERVER_FLAG_END_STREAM);
 	if (ret < 0) {
@@ -1234,8 +1233,7 @@ static int dynamic_get_req_v2(struct http_resource_detail_dynamic *dynamic_detai
 	int ret, remaining, offset = dynamic_detail->common.path_len;
 	char *ptr;
 
-	ret = send_headers_frame(client->fd, HTTP_SERVER_HPACK_STATUS_2OO,
-				 frame->stream_identifier,
+	ret = send_headers_frame(client, HTTP_200_OK, frame->stream_identifier,
 				 dynamic_detail->common.content_encoding);
 	if (ret < 0) {
 		LOG_DBG("Cannot write to socket (%d)", ret);
@@ -1305,8 +1303,7 @@ static int dynamic_post_req_v2(struct http_resource_detail_dynamic *dynamic_deta
 		return -ENOENT;
 	}
 
-	ret = send_headers_frame(client->fd, HTTP_SERVER_HPACK_STATUS_2OO,
-				 frame->stream_identifier,
+	ret = send_headers_frame(client, HTTP_200_OK, frame->stream_identifier,
 				 dynamic_detail->common.content_encoding);
 	if (ret < 0) {
 		LOG_DBG("Cannot write to socket (%d)", ret);
@@ -1561,7 +1558,7 @@ int handle_http_frame_headers(struct http_client_ctx *client)
 		if (detail->type == HTTP_RESOURCE_TYPE_STATIC) {
 			ret = handle_http2_static_resource(
 				(struct http_resource_detail_static *)detail,
-				frame, client->fd);
+				frame, client);
 			if (ret < 0) {
 				return ret;
 			}
@@ -1786,6 +1783,28 @@ const char *get_frame_type_name(enum http_frame_type type)
 	}
 }
 
+
+static int add_header_field(struct http_client_ctx *client, uint8_t **buf,
+			    size_t *buflen, const char *name, const char *value)
+{
+	int ret;
+
+	client->header_field.name = name;
+	client->header_field.name_len = strlen(name);
+	client->header_field.value = value;
+	client->header_field.value_len = strlen(value);
+
+	ret = http_hpack_encode_header(*buf, *buflen, &client->header_field);
+	if (ret < 0) {
+		return ret;
+	}
+
+	*buf += ret;
+	*buflen -= ret;
+
+	return 0;
+}
+
 void encode_frame_header(uint8_t *buf, uint32_t payload_len,
 			 enum http_frame_type frame_type,
 			 uint8_t flags, uint32_t stream_id)
@@ -1796,70 +1815,44 @@ void encode_frame_header(uint8_t *buf, uint32_t payload_len,
 	sys_put_be32(stream_id, &buf[HTTP_SERVER_FRAME_STREAM_ID_OFFSET]);
 }
 
-int send_headers_frame(int socket_fd, uint8_t hpack_status, uint32_t stream_id,
-		       const char *content_encoding)
+int send_headers_frame(struct http_client_ctx *client, enum http_status status,
+		       uint32_t stream_id, const char *content_encoding)
 {
-	uint8_t frame_header[HTTP_SERVER_FRAME_HEADER_SIZE];
-
-	/* TODO For now payload is hardcoded, but it should be possible to
-	 * generate headers dynamically (need hpack encoder).
-	 */
-	uint8_t headers_payload[] = {
-		/* HPACK :status */
-		hpack_status,
-	};
-
-	uint8_t encoding[] = {
-		0x5a,
-	};
-
-	/* FIXME, now supporting only 8 bit len */
-	uint8_t headers_payload_len = sizeof(headers_payload);
-	uint8_t content_encoding_len = 0;
+	uint8_t headers_frame[64];
+	uint8_t status_str[4];
+	uint8_t *buf = headers_frame + HTTP_SERVER_FRAME_HEADER_SIZE;
+	size_t buflen = sizeof(headers_frame) - HTTP_SERVER_FRAME_HEADER_SIZE;
+	size_t payload_len;
 	int ret;
 
-	if (content_encoding != NULL) {
-		content_encoding_len = strlen(content_encoding);
-		headers_payload_len += sizeof(encoding) + 1 /* encoding len byte */;
+	ret = snprintf(status_str, sizeof(status_str), "%d", status);
+	if (ret > sizeof(status_str) - 1) {
+		return -EINVAL;
 	}
 
-	encode_frame_header(frame_header,
-			    headers_payload_len + content_encoding_len,
-			    HTTP_SERVER_HEADERS_FRAME,
+	ret = add_header_field(client, &buf, &buflen, ":status", status_str);
+	if (ret < 0) {
+		return ret;
+	}
+
+	if (content_encoding != NULL) {
+		ret = add_header_field(client, &buf, &buflen, "content-encoding",
+				       "gzip");
+		if (ret < 0) {
+			return ret;
+		}
+	}
+
+	payload_len = sizeof(headers_frame) - buflen - HTTP_SERVER_FRAME_HEADER_SIZE;
+
+	encode_frame_header(headers_frame, payload_len, HTTP_SERVER_HEADERS_FRAME,
 			    HTTP_SERVER_FLAG_END_HEADERS, stream_id);
 
-	ret = sendall(socket_fd, frame_header, sizeof(frame_header));
+	ret = sendall(client->fd, headers_frame,
+		      payload_len + HTTP_SERVER_FRAME_HEADER_SIZE);
 	if (ret < 0) {
 		LOG_DBG("Cannot write to socket (%d)", ret);
 		return ret;
-	}
-
-	ret = sendall(socket_fd, headers_payload, sizeof(headers_payload));
-	if (ret < 0) {
-		LOG_DBG("Cannot write to socket (%d)", ret);
-		return ret;
-	}
-
-	if (content_encoding != NULL) {
-		ret = sendall(socket_fd, encoding, sizeof(encoding));
-		if (ret < 0) {
-			LOG_DBG("Cannot write to socket (%d)", ret);
-			return ret;
-		}
-
-		ret = sendall(socket_fd, &content_encoding_len,
-			      sizeof(content_encoding_len));
-		if (ret < 0) {
-			LOG_DBG("Cannot write to socket (%d)", ret);
-			return ret;
-		}
-
-		ret = sendall(socket_fd, content_encoding,
-			      content_encoding_len);
-		if (ret < 0) {
-			LOG_DBG("Cannot write to socket (%d)", ret);
-			return ret;
-		}
 	}
 
 	return 0;

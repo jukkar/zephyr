@@ -12,13 +12,14 @@
 
 #include <zephyr/net/http/server.h>
 #include <zephyr/net/http/service.h>
+#include <zephyr/net/http/status.h>
 #include <zephyr/net/http/hpack.h>
 #include <zephyr/net/http/frame.h>
 
 struct http_resource_detail *get_resource_detail(const char *path, int *);
 int handle_http1_static_resource(struct http_resource_detail_static *static_detail, int client_fd);
 int handle_http2_static_resource(struct http_resource_detail_static *static_detail,
-				 struct http_frame *frame, int client_fd);
+				 struct http_frame *frame, struct http_client_ctx *client);
 void print_http_frames(struct http_client_ctx *ctx_client);
 int parse_http_frame_header(struct http_client_ctx *ctx_client);
 bool settings_ack_flag(unsigned char flags);
@@ -67,8 +68,8 @@ struct http_stream_ctx *allocate_http_stream_context(struct http_client_ctx *ctx
 						     uint32_t stream_id);
 void encode_frame_header(uint8_t *buf, uint32_t payload_len, enum http_frame_type frame_type,
 			 uint8_t flags, uint32_t stream_id);
-int send_headers_frame(int socket_fd, uint8_t hpack_status, uint32_t stream_id,
-		       const char *content_encoding);
+int send_headers_frame(struct http_client_ctx *client, enum http_status status,
+		       uint32_t stream_id, const char *content_encoding);
 int send_data_frame(int socket_fd, const char *payload, size_t length, uint32_t stream_id,
 		    uint8_t flags);
 int handle_http2_dynamic_resource(struct http_resource_detail_dynamic *dynamic_detail,
