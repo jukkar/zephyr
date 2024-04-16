@@ -46,6 +46,9 @@ int handle_http_frame_header(struct http_server_ctx *ctx_server,
 int handle_http_frame_headers(struct http_client_ctx *ctx_client);
 int handle_http1_request(struct http_server_ctx *ctx_server, struct http_client_ctx *ctx_client);
 int handle_http_done(struct http_server_ctx *ctx_server, struct http_client_ctx *ctx_client);
+int handle_http_frame_data(struct http_client_ctx *client);
+int enter_http_frame_data_state(struct http_server_ctx *server,
+				struct http_client_ctx *client);
 int enter_http_frame_headers_state(struct http_server_ctx *ctx_server,
 				   struct http_client_ctx *ctx_client);
 int enter_http_frame_continuation_state(struct http_client_ctx *ctx_client);
@@ -64,7 +67,11 @@ struct http_stream_ctx *allocate_http_stream_context(struct http_client_ctx *ctx
 						     uint32_t stream_id);
 void encode_frame_header(uint8_t *buf, uint32_t payload_len, enum http_frame_type frame_type,
 			 uint8_t flags, uint32_t stream_id);
-int send_headers_frame(int socket_fd, uint8_t hpack_status, uint32_t stream_id);
-int send_data_frame(int socket_fd, const char *payload, size_t length, uint32_t stream_id);
-
+int send_headers_frame(int socket_fd, uint8_t hpack_status, uint32_t stream_id,
+		       const char *content_encoding);
+int send_data_frame(int socket_fd, const char *payload, size_t length, uint32_t stream_id,
+		    uint8_t flags);
+int handle_http2_dynamic_resource(struct http_resource_detail_dynamic *dynamic_detail,
+				  struct http_frame *frame,
+				  struct http_client_ctx *client);
 #endif
