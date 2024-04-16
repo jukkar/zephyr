@@ -1854,7 +1854,7 @@ int send_data_frame(int socket_fd, const char *payload, size_t length,
 	int ret;
 
 	encode_frame_header(frame_header, length, HTTP_SERVER_DATA_FRAME,
-			    settings_end_stream_flag(flags) ?
+			    end_stream_flag(flags) ?
 			    HTTP_SERVER_FLAG_END_STREAM : 0,
 			    stream_id);
 
@@ -1986,12 +1986,12 @@ bool settings_ack_flag(unsigned char flags)
 	return (flags & HTTP_SERVER_FLAG_SETTINGS_ACK) != 0;
 }
 
-bool settings_end_headers_flag(unsigned char flags)
+bool end_headers_flag(unsigned char flags)
 {
 	return (flags & HTTP_SERVER_FLAG_END_HEADERS) != 0;
 }
 
-bool settings_end_stream_flag(unsigned char flags)
+bool end_stream_flag(unsigned char flags)
 {
 	return (flags & HTTP_SERVER_FLAG_END_STREAM) != 0;
 }

@@ -23,8 +23,8 @@ int handle_http2_static_resource(struct http_resource_detail_static *static_deta
 void print_http_frames(struct http_client_ctx *ctx_client);
 int parse_http_frame_header(struct http_client_ctx *ctx_client);
 bool settings_ack_flag(unsigned char flags);
-bool settings_end_headers_flag(unsigned char flags);
-bool settings_end_stream_flag(unsigned char flags);
+bool end_headers_flag(unsigned char flags);
+bool end_stream_flag(unsigned char flags);
 int sendall(int sock, const void *buf, size_t len);
 const char *get_frame_type_name(enum http_frame_type type);
 int on_header_field(struct http_parser *p, const char *at, size_t length);
