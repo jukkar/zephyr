@@ -501,6 +501,9 @@ int handle_http_request(struct http_server_ctx *server, struct http_client_ctx *
 
 	do {
 		switch (client->server_state) {
+		case HTTP_SERVER_FRAME_DATA_STATE:
+			ret = handle_http_frame_data(client);
+			break;
 		case HTTP_SERVER_PREFACE_STATE:
 			ret = handle_http_preface(server, client);
 			break;
@@ -573,6 +576,8 @@ int handle_http_frame_header(struct http_server_ctx *server,
 	client->data_len -= bytes_consumed;
 
 	switch (client->current_frame.type) {
+	case HTTP_SERVER_DATA_FRAME:
+		return enter_http_frame_data_state(server, client);
 	case HTTP_SERVER_HEADERS_FRAME:
 		return enter_http_frame_headers_state(server, client);
 	case HTTP_SERVER_CONTINUATION_FRAME:
@@ -601,6 +606,29 @@ int enter_http_frame_settings_state(struct http_client_ctx *client)
 	return 0;
 }
 
+int enter_http_frame_data_state(struct http_server_ctx *server,
+				   struct http_client_ctx *client)
+{
+	struct http_frame *frame = &client->current_frame;
+	struct http_stream_ctx *stream;
+
+	stream = find_http_stream_context(client, frame->stream_identifier);
+	if (!stream) {
+		LOG_DBG("|| stream ID ||  %d", frame->stream_identifier);
+
+		stream = allocate_http_stream_context(client, frame->stream_identifier);
+		if (!stream) {
+			LOG_DBG("No available stream slots. Connection closed.");
+
+			return -ENOMEM;
+		}
+	}
+
+	client->server_state = HTTP_SERVER_FRAME_DATA_STATE;
+
+	return 0;
+}
+
 int enter_http_frame_headers_state(struct http_server_ctx *server,
 				   struct http_client_ctx *client)
 {
@@ -619,12 +647,7 @@ int enter_http_frame_headers_state(struct http_server_ctx *server,
 		}
 	}
 
-	if (settings_end_headers_flag(client->current_frame.flags) &&
-	    settings_end_stream_flag(client->current_frame.flags)) {
-		client->server_state = HTTP_SERVER_FRAME_HEADERS_STATE;
-	} else {
-		client->server_state = HTTP_SERVER_FRAME_HEADER_STATE;
-	}
+	client->server_state = HTTP_SERVER_FRAME_HEADERS_STATE;
 
 	return 0;
 }
@@ -890,7 +913,6 @@ static int dynamic_post_req(struct http_resource_detail_dynamic *dynamic_detail,
 	start += 4; /* skip \r\n\r\n */
 	remaining = strlen(start);
 
-	/* Pass URL to the client */
 	while (1) {
 		int copy_len, send_len;
 
@@ -953,11 +975,11 @@ int handle_http1_dynamic_resource(struct http_resource_detail_dynamic *dynamic_d
 
 	user_method = dynamic_detail->common.bitmask_of_supported_http_methods;
 
-	if (!(BIT(client->parser.method) & user_method)) {
+	if (!(BIT(client->method) & user_method)) {
 		return -ENOPROTOOPT;
 	}
 
-	switch (client->parser.method) {
+	switch (client->method) {
 	case HTTP_HEAD:
 		if (user_method & BIT(HTTP_HEAD)) {
 			ret = sendall(client->fd, RESPONSE_TEMPLATE_DYNAMIC,
@@ -989,8 +1011,8 @@ int handle_http1_dynamic_resource(struct http_resource_detail_dynamic *dynamic_d
 not_supported:
 	default:
 		LOG_DBG("HTTP method %s (%d) not supported.",
-			http_method_str(client->parser.method),
-			client->parser.method);
+			http_method_str(client->method),
+			client->method);
 
 		return -ENOTSUP;
 	}
@@ -1079,6 +1101,28 @@ again:
 	return 0;
 }
 
+static int send_http2_404(struct http_client_ctx *client,
+			  struct http_frame *frame)
+{
+	int ret;
+
+	ret = send_headers_frame(client->fd, HTTP_SERVER_HPACK_STATUS_4O4,
+				 frame->stream_identifier, "gzip");
+	if (ret < 0) {
+		LOG_DBG("Cannot write to socket (%d)", ret);
+		return ret;
+	}
+
+	ret = send_data_frame(client->fd, content_404, sizeof(content_404),
+			      frame->stream_identifier,
+			      HTTP_SERVER_FLAG_END_STREAM);
+	if (ret < 0) {
+		LOG_DBG("Cannot write to socket (%d)", ret);
+	}
+
+	return ret;
+}
+
 /* This feature is theoretically obsoleted in RFC9113, but curl for instance
  * still uses it, so implement as described in RFC7540.
  */
@@ -1127,15 +1171,10 @@ static int handle_http1_to_http2_upgrade(struct http_server_ctx *server,
 				goto error;
 			}
 		}
-	} else {
-		ret = send_headers_frame(client->fd, HTTP_SERVER_HPACK_STATUS_4O4,
-					 frame.stream_identifier);
-		if (ret < 0) {
-			goto error;
-		}
 
-		ret = send_data_frame(client->fd, content_404, sizeof(content_404),
-				      frame.stream_identifier);
+		/* TODO: implement POST when using upgrade method */
+	} else {
+		ret = send_http2_404(client, &frame);
 		if (ret < 0) {
 			goto error;
 		}
@@ -1171,6 +1210,8 @@ int handle_http1_request(struct http_server_ctx *server, struct http_client_ctx 
 		LOG_ERR("HTTP/1 parsing error, %d", client->parser.http_errno);
 		return -EBADMSG;
 	}
+
+	client->method = client->parser.method;
 
 	if (client->has_upgrade_header) {
 		return handle_http1_to_http2_upgrade(server, client);
@@ -1232,24 +1273,269 @@ int handle_http_done(struct http_server_ctx *server, struct http_client_ctx *cli
 int handle_http2_static_resource(struct http_resource_detail_static *static_detail,
 				 struct http_frame *frame, int client_fd)
 {
-	if (static_detail->common.bitmask_of_supported_http_methods & BIT(HTTP_GET)) {
-		const char *content_200 = static_detail->static_data;
-		size_t content_size = static_detail->static_data_len;
-		int ret;
+	const char *content_200;
+	size_t content_len;
+	int ret;
 
-		ret = send_headers_frame(client_fd, HTTP_SERVER_HPACK_STATUS_2OO,
-					 frame->stream_identifier);
-		if (ret < 0) {
-			LOG_DBG("Cannot write to socket (%d)", ret);
-			return ret;
+	if (!(static_detail->common.bitmask_of_supported_http_methods & BIT(HTTP_GET))) {
+		return -ENOTSUP;
+	}
+
+	content_200 = static_detail->static_data;
+	content_len = static_detail->static_data_len;
+
+	ret = send_headers_frame(client_fd, HTTP_SERVER_HPACK_STATUS_2OO,
+				 frame->stream_identifier,
+				 static_detail->common.content_encoding);
+	if (ret < 0) {
+		LOG_DBG("Cannot write to socket (%d)", ret);
+		goto out;
+	}
+
+	ret = send_data_frame(client_fd, content_200, content_len,
+			      frame->stream_identifier, 0);
+	if (ret < 0) {
+		LOG_DBG("Cannot write to socket (%d)", ret);
+		goto out;
+	}
+
+	ret = send_data_frame(client_fd, NULL, 0,
+			      frame->stream_identifier,
+			      HTTP_SERVER_FLAG_END_STREAM);
+	if (ret < 0) {
+		LOG_DBG("Cannot send last frame (%d)", ret);
+		goto out;
+	}
+
+out:
+	return ret;
+}
+
+static int dynamic_get_req_v2(struct http_resource_detail_dynamic *dynamic_detail,
+			      struct http_client_ctx *client)
+{
+	struct http_frame *frame = &client->current_frame;
+	int ret, remaining, offset = dynamic_detail->common.path_len;
+	char *ptr;
+
+	ret = send_headers_frame(client->fd, HTTP_SERVER_HPACK_STATUS_2OO,
+				 frame->stream_identifier,
+				 dynamic_detail->common.content_encoding);
+	if (ret < 0) {
+		LOG_DBG("Cannot write to socket (%d)", ret);
+		return ret;
+	}
+
+	remaining = strlen(&client->url_buffer[dynamic_detail->common.path_len]);
+
+	/* Pass URL to the client */
+	while (1) {
+		int copy_len, send_len;
+
+		ptr = &client->url_buffer[offset];
+		copy_len = MIN(remaining, dynamic_detail->data_buffer_len);
+
+		memcpy(dynamic_detail->data_buffer, ptr, copy_len);
+
+again:
+		send_len = dynamic_detail->cb(client,
+					      dynamic_detail->data_buffer,
+					      copy_len,
+					      dynamic_detail->user_data);
+		if (send_len > 0) {
+			ret = send_data_frame(client->fd,
+					      dynamic_detail->data_buffer,
+					      send_len,
+					      frame->stream_identifier,
+					      0);
+			if (ret < 0) {
+				break;
+			}
+
+			offset += copy_len;
+			remaining -= copy_len;
+
+			/* If we have passed all the data to the application,
+			 * then just pass empty buffer to it.
+			 */
+			if (remaining == 0) {
+				copy_len = 0;
+				goto again;
+			}
+
+			continue;
 		}
 
-		ret = send_data_frame(client_fd, content_200, content_size,
-				      frame->stream_identifier);
+		ret = send_data_frame(client->fd, NULL, 0,
+				      frame->stream_identifier,
+				      HTTP_SERVER_FLAG_END_STREAM);
 		if (ret < 0) {
-			LOG_DBG("Cannot write to socket (%d)", ret);
-			return ret;
+			LOG_DBG("Cannot send last frame (%d)", ret);
 		}
+
+		break;
+	}
+
+	return ret;
+}
+
+static int dynamic_post_req_v2(struct http_resource_detail_dynamic *dynamic_detail,
+			       struct http_client_ctx *client)
+{
+	struct http_frame *frame = &client->current_frame;
+	int ret, tmp, remaining;
+
+	if (dynamic_detail == NULL) {
+		return -ENOENT;
+	}
+
+	ret = send_headers_frame(client->fd, HTTP_SERVER_HPACK_STATUS_2OO,
+				 frame->stream_identifier,
+				 dynamic_detail->common.content_encoding);
+	if (ret < 0) {
+		LOG_DBG("Cannot write to socket (%d)", ret);
+		return ret;
+	}
+
+	remaining = client->content_len;
+
+	while (1) {
+		int copy_len, send_len;
+
+		/* Read all the user data and pass it to application. After
+		 * passing all the data, if application returns 0, it means
+		 * that there is no more data to send to client.
+		 */
+
+		copy_len = MIN(remaining, dynamic_detail->data_buffer_len);
+		copy_len = MIN(copy_len, client->data_len);
+
+		if (copy_len > 0) {
+			memcpy(dynamic_detail->data_buffer, client->cursor, copy_len);
+			remaining -= copy_len;
+			client->cursor += copy_len;
+			client->data_len -= copy_len;
+		} else {
+			remaining = 0;
+		}
+
+		send_len = dynamic_detail->cb(client,
+					      dynamic_detail->data_buffer,
+					      copy_len,
+					      dynamic_detail->user_data);
+		if (send_len > 0) {
+			ret = send_data_frame(client->fd,
+					      dynamic_detail->data_buffer,
+					      send_len,
+					      frame->stream_identifier,
+					      0);
+			if (ret < 0) {
+				break;
+			}
+		} else if (send_len == 0) {
+			/* If we do not have anything to send to application,
+			 * then just stop.
+			 */
+
+			/* Application did not get all the data */
+			if (remaining > 0) {
+				continue;
+			}
+
+			ret = 0;
+			break;
+		} else {
+			break;
+		}
+	}
+
+	tmp = send_data_frame(client->fd, NULL, 0,
+			      frame->stream_identifier,
+			      HTTP_SERVER_FLAG_END_STREAM);
+	if (tmp < 0) {
+		LOG_DBG("Cannot send last frame (%d)", tmp);
+		ret = tmp;
+	}
+
+	return ret;
+}
+
+int handle_http_frame_data(struct http_client_ctx *client)
+{
+	struct http_frame *frame = &client->current_frame;
+	int bytes_consumed;
+	int ret;
+
+	if (client->data_len < frame->length) {
+		return -EAGAIN;
+	}
+
+	LOG_DBG("HTTP_SERVER_FRAME_DATA_STATE");
+
+	print_http_frames(client);
+
+	bytes_consumed = client->current_frame.length;
+
+	if (client->current_detail == NULL) {
+		/* There is no handler */
+		LOG_DBG("No dynamic handler found.");
+		(void)send_http2_404(client, frame);
+		return -ENOENT;
+	}
+
+	ret = dynamic_post_req_v2(
+		(struct http_resource_detail_dynamic *)client->current_detail,
+		client);
+	if (ret < 0 && ret == -ENOENT) {
+		ret = send_http2_404(client, frame);
+	}
+
+	return ret;
+}
+
+int handle_http2_dynamic_resource(struct http_resource_detail_dynamic *dynamic_detail,
+				  struct http_frame *frame,
+				  struct http_client_ctx *client)
+{
+	uint32_t user_method;
+
+	if (dynamic_detail->cb == NULL) {
+		return -ESRCH;
+	}
+
+	user_method = dynamic_detail->common.bitmask_of_supported_http_methods;
+
+	if (!(BIT(client->method) & user_method)) {
+		return -ENOPROTOOPT;
+	}
+
+	switch (client->method) {
+	case HTTP_GET:
+		if (user_method & BIT(HTTP_GET)) {
+			return dynamic_get_req_v2(dynamic_detail, client);
+		}
+
+		goto not_supported;
+
+	case HTTP_POST:
+		/* The data will come in DATA frames. Remember the detail ptr
+		 * which needs to be known when passing data to application.
+		 */
+		if (user_method & BIT(HTTP_POST)) {
+			client->current_detail =
+				(struct http_resource_detail *)dynamic_detail;
+			break;
+		}
+
+		goto not_supported;
+
+not_supported:
+	default:
+		LOG_DBG("HTTP method %s (%d) not supported.",
+			http_method_str(client->method),
+			client->method);
+
+		return -ENOTSUP;
 	}
 
 	return 0;
@@ -1292,24 +1578,25 @@ int handle_http_frame_headers(struct http_client_ctx *client)
 		client->cursor += ret;
 		client->data_len -= ret;
 
-		LOG_INF("Parsed header: %.*s %.*s", header->name_len,
+		LOG_DBG("Parsed header: %.*s %.*s", header->name_len,
 			header->name, header->value_len, header->value);
 
 		/* For now, we're only interested in method and URL. */
-		if (header->name_len == strlen(":method") &&
+		if (header->name_len == (sizeof(":method") - 1) &&
 		    memcmp(header->name, ":method", header->name_len) == 0) {
 			/* TODO Improve string to method conversion */
-			if (header->value_len == strlen("GET") &&
+			if (header->value_len == (sizeof("GET") - 1) &&
 			    memcmp(header->value, "GET", header->value_len) == 0) {
 				client->method = HTTP_GET;
-			} else if (header->value_len == strlen("POST") &&
+			} else if (header->value_len == (sizeof("POST") - 1) &&
 				   memcmp(header->value, "POST", header->value_len) == 0) {
 				client->method = HTTP_POST;
 			} else {
 				/* Unknown method */
 				return -EBADMSG;
 			}
-		} else if (header->name_len == strlen(":path") &&
+
+		} else if (header->name_len == (sizeof(":path") - 1) &&
 			   memcmp(header->name, ":path", header->name_len) == 0) {
 			if (header->value_len > sizeof(client->url_buffer) - 1) {
 				/* URL too long to handle */
@@ -1318,8 +1605,35 @@ int handle_http_frame_headers(struct http_client_ctx *client)
 
 			memcpy(client->url_buffer, header->value, header->value_len);
 			client->url_buffer[header->value_len] = '\0';
+
+		} else if (header->name_len == (sizeof("content-type") - 1) &&
+			   memcmp(header->name, "content-type", header->name_len) == 0) {
+			if (header->value_len > sizeof(client->content_type) - 1) {
+				/* URL too long to handle */
+				return -ENOBUFS;
+			}
+
+			memcpy(client->content_type, header->value, header->value_len);
+			client->content_type[header->value_len] = '\0';
+
+		} else if (header->name_len == (sizeof("content-length") - 1) &&
+			   memcmp(header->name, "content-length", header->name_len) == 0) {
+			char len_str[16] = { 0 };
+			char *endptr;
+			unsigned long len;
+
+			memcpy(len_str, header->value, MIN(sizeof(len_str), header->value_len));
+			len_str[sizeof(len_str) - 1] = '\0';
+
+			len = strtoul(len_str, &endptr, 10);
+			if (*endptr != '\0') {
+				return -EINVAL;
+			}
+
+			client->content_len = (size_t)len;
 		} else {
 			/* Just ignore for now. */
+			LOG_DBG("Ignoring field %.*s", header->name_len, header->name);
 		}
 	}
 
@@ -1332,24 +1646,23 @@ int handle_http_frame_headers(struct http_client_ctx *client)
 
 		if (detail->type == HTTP_RESOURCE_TYPE_STATIC) {
 			ret = handle_http2_static_resource(
-				(struct http_resource_detail_static *)detail, frame,
-				client->fd);
+				(struct http_resource_detail_static *)detail,
+				frame, client->fd);
+			if (ret < 0) {
+				return ret;
+			}
+		} else if (detail->type == HTTP_RESOURCE_TYPE_DYNAMIC) {
+			ret = handle_http2_dynamic_resource(
+				(struct http_resource_detail_dynamic *)detail,
+				frame, client);
 			if (ret < 0) {
 				return ret;
 			}
 		}
-	} else {
-		ret = send_headers_frame(client->fd, HTTP_SERVER_HPACK_STATUS_4O4,
-					 frame->stream_identifier);
-		if (ret < 0) {
-			LOG_DBG("Cannot write to socket (%d)", ret);
-			return ret;
-		}
 
-		ret = send_data_frame(client->fd, content_404, sizeof(content_404),
-				      frame->stream_identifier);
+	} else {
+		ret = send_http2_404(client, frame);
 		if (ret < 0) {
-			LOG_DBG("Cannot write to socket (%d)", ret);
 			return ret;
 		}
 	}
@@ -1559,7 +1872,8 @@ const char *get_frame_type_name(enum http_frame_type type)
 	}
 }
 
-void encode_frame_header(uint8_t *buf, uint32_t payload_len, enum http_frame_type frame_type,
+void encode_frame_header(uint8_t *buf, uint32_t payload_len,
+			 enum http_frame_type frame_type,
 			 uint8_t flags, uint32_t stream_id)
 {
 	sys_put_be24(payload_len, &buf[HTTP_SERVER_FRAME_LENGTH_OFFSET]);
@@ -1568,7 +1882,8 @@ void encode_frame_header(uint8_t *buf, uint32_t payload_len, enum http_frame_typ
 	sys_put_be32(stream_id, &buf[HTTP_SERVER_FRAME_STREAM_ID_OFFSET]);
 }
 
-int send_headers_frame(int socket_fd, uint8_t hpack_status, uint32_t stream_id)
+int send_headers_frame(int socket_fd, uint8_t hpack_status, uint32_t stream_id,
+		       const char *content_encoding)
 {
 	uint8_t frame_header[HTTP_SERVER_FRAME_HEADER_SIZE];
 
@@ -1578,17 +1893,24 @@ int send_headers_frame(int socket_fd, uint8_t hpack_status, uint32_t stream_id)
 	uint8_t headers_payload[] = {
 		/* HPACK :status */
 		hpack_status,
-		/* HPACK content-encoding: gzip */
-		0x5a,
-		0x04,
-		0x67,
-		0x7a,
-		0x69,
-		0x70,
 	};
+
+	uint8_t encoding[] = {
+		0x5a,
+	};
+
+	/* FIXME, now supporting only 8 bit len */
+	uint8_t headers_payload_len = sizeof(headers_payload);
+	uint8_t content_encoding_len = 0;
 	int ret;
 
-	encode_frame_header(frame_header, sizeof(headers_payload),
+	if (content_encoding != NULL) {
+		content_encoding_len = strlen(content_encoding);
+		headers_payload_len += sizeof(encoding) + 1 /* encoding len byte */;
+	}
+
+	encode_frame_header(frame_header,
+			    headers_payload_len + content_encoding_len,
 			    HTTP_SERVER_HEADERS_FRAME,
 			    HTTP_SERVER_FLAG_END_HEADERS, stream_id);
 
@@ -1604,30 +1926,55 @@ int send_headers_frame(int socket_fd, uint8_t hpack_status, uint32_t stream_id)
 		return ret;
 	}
 
+	if (content_encoding != NULL) {
+		ret = sendall(socket_fd, encoding, sizeof(encoding));
+		if (ret < 0) {
+			LOG_DBG("Cannot write to socket (%d)", ret);
+			return ret;
+		}
+
+		ret = sendall(socket_fd, &content_encoding_len,
+			      sizeof(content_encoding_len));
+		if (ret < 0) {
+			LOG_DBG("Cannot write to socket (%d)", ret);
+			return ret;
+		}
+
+		ret = sendall(socket_fd, content_encoding,
+			      content_encoding_len);
+		if (ret < 0) {
+			LOG_DBG("Cannot write to socket (%d)", ret);
+			return ret;
+		}
+	}
+
 	return 0;
 }
 
-int send_data_frame(int socket_fd, const char *payload, size_t length, uint32_t stream_id)
+int send_data_frame(int socket_fd, const char *payload, size_t length,
+		    uint32_t stream_id, uint8_t flags)
 {
 	uint8_t frame_header[HTTP_SERVER_FRAME_HEADER_SIZE];
 	int ret;
 
 	encode_frame_header(frame_header, length, HTTP_SERVER_DATA_FRAME,
-			    HTTP_SERVER_FLAG_END_STREAM, stream_id);
+			    settings_end_stream_flag(flags) ?
+			    HTTP_SERVER_FLAG_END_STREAM : 0,
+			    stream_id);
 
 	ret = sendall(socket_fd, frame_header, sizeof(frame_header));
 	if (ret < 0) {
 		LOG_DBG("Cannot write to socket (%d)", ret);
-		return ret;
+	} else {
+		if (payload != NULL && length > 0) {
+			ret = sendall(socket_fd, payload, length);
+			if (ret < 0) {
+				LOG_DBG("Cannot write to socket (%d)", ret);
+			}
+		}
 	}
 
-	ret = sendall(socket_fd, payload, length);
-	if (ret < 0) {
-		LOG_DBG("Cannot write to socket (%d)", ret);
-		return ret;
-	}
-
-	return 0;
+	return ret;
 }
 
 void print_http_frames(struct http_client_ctx *client)
@@ -1687,7 +2034,7 @@ int parse_http_frame_header(struct http_client_ctx *client)
 				   (buffer[HTTP_SERVER_FRAME_STREAM_ID_OFFSET + 2] << 8) |
 				   buffer[HTTP_SERVER_FRAME_STREAM_ID_OFFSET + 3];
 	frame->stream_identifier &= 0x7FFFFFFF;
-	frame->payload = buffer;
+	frame->payload = buffer + HTTP_SERVER_FRAME_HEADER_SIZE;
 
 	LOG_DBG("Frame len %d type 0x%02x flags 0x%02x id %d",
 		frame->length, frame->type, frame->flags, frame->stream_identifier);

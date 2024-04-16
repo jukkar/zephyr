@@ -97,6 +97,13 @@ config HTTP_SERVER_MAX_URL_LENGTH
 	help
 	  This setting determines the maximum length of the HTTP URL that the server can process.
 
+config HTTP_SERVER_MAX_CONTENT_TYPE_LENGTH
+	int "Maximum HTTP Content-Type Length"
+	default 64
+	range 1 128
+	help
+	  This setting determines the maximum length of the HTTP Content-Length field.
+
 config HTTP_SERVER_MAX_FRAME_SIZE
 	int "Maximum Frame Size"
 	default 2048

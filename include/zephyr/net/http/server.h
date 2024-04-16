@@ -28,6 +28,7 @@
 #define HTTP_SERVER_MAX_SERVICES       CONFIG_HTTP_NUM_SERVICES
 #define HTTP_SERVER_MAX_CLIENTS        CONFIG_HTTP_SERVER_MAX_CLIENTS
 #define HTTP_SERVER_MAX_STREAMS        CONFIG_HTTP_SERVER_MAX_STREAMS
+#define HTTP_SERVER_MAX_CONTENT_TYPE_LEN CONFIG_HTTP_SERVER_MAX_CONTENT_TYPE_LENGTH
 
 enum http_resource_type {
 	HTTP_RESOURCE_TYPE_STATIC,
@@ -145,11 +146,14 @@ struct http_client_ctx {
 	size_t data_len; /**< Data left to process in the buffer. */
 	enum http_server_state server_state;
 	struct http_frame current_frame;
+	struct http_resource_detail *current_detail;
 	struct http_hpack_header_buf header_field;
 	struct http_stream_ctx streams[HTTP_SERVER_MAX_STREAMS];
 	struct http_parser_settings parser_settings;
 	struct http_parser parser;
 	unsigned char url_buffer[CONFIG_HTTP_SERVER_MAX_URL_LENGTH];
+	unsigned char content_type[CONFIG_HTTP_SERVER_MAX_CONTENT_TYPE_LENGTH];
+	size_t content_len;
 	enum http_method method;
 };
 
