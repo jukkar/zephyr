@@ -313,6 +313,17 @@ static const struct decode_elem *huffman_decode_bits(uint32_t bits)
 	return NULL;
 }
 
+static const struct decode_elem *huffman_find_entry(uint8_t symbol)
+{
+	for (int i = 0; i < ARRAY_SIZE(decode_table); i++) {
+		if (decode_table[i].symbol == symbol) {
+			return &decode_table[i];
+		}
+	}
+
+	return NULL;
+}
+
 #define MAX_PADDING_LEN 7
 
 int http_hpack_huffman_decode(const uint8_t *encoded_buf, size_t encoded_len,
@@ -407,5 +418,63 @@ int http_hpack_huffman_decode(const uint8_t *encoded_buf, size_t encoded_len,
 int http_hpack_huffman_encode(const uint8_t *str, size_t str_len,
 			      uint8_t *buf, size_t buflen)
 {
-	return str_len;
+	const struct decode_elem *entry;
+	size_t buflen_bits = buflen * 8;
+	uint8_t bit_offset = 0;
+	int len = 0;
+
+	if (str == NULL || buf == NULL || str_len == 0) {
+		return -EINVAL;
+	}
+
+	while (str_len > 0) {
+		uint32_t code;
+		uint8_t bitlen;
+
+		entry = huffman_find_entry(*str);
+		if (entry == NULL) {
+			return -EINVAL;
+		}
+
+		if (entry->bitlen > buflen_bits) {
+			return -ENOBUFS;
+		}
+
+		bitlen = entry->bitlen;
+		code = sys_get_be32(entry->code);
+
+		while (bitlen > 0) {
+			uint8_t to_copy = MIN(8 - bit_offset, bitlen);
+			uint8_t byte = (uint8_t)((code & MSB_MASK(to_copy)) >>
+						 (24 + bit_offset));
+
+			/* This is way suboptimal */
+			if (bit_offset == 0) {
+				*buf = byte;
+			} else {
+				*buf |= byte;
+			}
+
+			code <<= to_copy;
+			bitlen -= to_copy;
+			bit_offset  = (bit_offset + to_copy) % 8;
+
+			if (bit_offset == 0) {
+				buf++;
+				len++;
+			}
+		}
+
+		buflen_bits -= entry->bitlen;
+		str_len--;
+		str++;
+	}
+
+	/* Pad with ones. */
+	if (bit_offset > 0) {
+		*buf |= LSB_MASK((8 - bit_offset));
+		len++;
+	}
+
+	return len;
 }
