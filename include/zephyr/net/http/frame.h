@@ -7,6 +7,8 @@
 #ifndef ZEPHYR_INCLUDE_NET_HTTP_SERVER_FRAME_H_
 #define ZEPHYR_INCLUDE_NET_HTTP_SERVER_FRAME_H_
 
+#include <stdint.h>
+
 enum http_frame_type {
 	HTTP_SERVER_DATA_FRAME = 0x00,
 	HTTP_SERVER_HEADERS_FRAME = 0x01,
@@ -32,5 +34,19 @@ enum http_frame_type {
 #define HTTP_SERVER_FRAME_TYPE_OFFSET      3
 #define HTTP_SERVER_FRAME_FLAGS_OFFSET     4
 #define HTTP_SERVER_FRAME_STREAM_ID_OFFSET 5
+
+struct http_settings_field {
+	uint16_t id;
+	uint32_t value;
+} __packed;
+
+enum http_settings {
+	HTTP_SETTINGS_HEADER_TABLE_SIZE = 1,
+	HTTP_SETTINGS_ENABLE_PUSH = 2,
+	HTTP_SETTINGS_MAX_CONCURRENT_STREAMS = 3,
+	HTTP_SETTINGS_INITIAL_WINDOW_SIZE = 4,
+	HTTP_SETTINGS_MAX_FRAME_SIZE = 5,
+	HTTP_SETTINGS_MAX_HEADER_LIST_SIZE = 6,
+};
 
 #endif

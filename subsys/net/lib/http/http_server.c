@@ -37,17 +37,7 @@ static const char preface[] = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 static const char final_chunk[] = "0\r\n\r\n";
 static const char *crlf = &final_chunk[3];
 
-static const unsigned char settings_frame[9] = {
-	0x00, 0x00, 0x00,        /* Length */
-	0x04,                    /* Type: 0x04 - setting frames for config or acknowledgment */
-	0x00,                    /* Flags: 0x00 - unused flags */
-	0x00, 0x00, 0x00, 0x00}; /* Reserved, Stream Identifier: 0x00 - overall connection */
-
-static const unsigned char settings_ack[9] = {
-	0x00, 0x00, 0x00,        /* Length */
-	0x04,                    /* Type: 0x04 - setting frames for config or acknowledgment */
-	0x01,                    /* Flags: 0x01 - ACK */
-	0x00, 0x00, 0x00, 0x00}; /* Reserved, Stream Identifier */
+static int send_settings_frame(struct http_client_ctx *client, bool ack);
 
 static const char content_404[] = {
 #ifdef INCLUDE_HTML_CONTENT
@@ -722,8 +712,7 @@ int handle_http_preface(struct http_server_ctx *server,
 		 * (settings frame).
 		 */
 		if (!client->preface_sent) {
-			ret = sendall(client->fd, settings_frame,
-				      sizeof(settings_frame));
+			ret = send_settings_frame(client, false);
 			if (ret < 0) {
 				return ret;
 			}
@@ -1071,7 +1060,7 @@ static int handle_http1_to_http2_upgrade(struct http_server_ctx *server,
 	/* The first HTTP/2 frame sent by the server MUST be a server connection
 	 * preface.
 	 */
-	ret = sendall(client->fd, settings_frame, sizeof(settings_frame));
+	ret = send_settings_frame(client, false);
 	if (ret < 0) {
 		goto error;
 	}
@@ -1634,7 +1623,7 @@ int handle_http_frame_settings(struct http_client_ctx *client)
 	if (!settings_ack_flag(frame->flags)) {
 		int ret;
 
-		ret = sendall(client->fd, settings_ack, sizeof(settings_ack));
+		ret = send_settings_frame(client, true);
 		if (ret < 0) {
 			LOG_DBG("Cannot write to socket (%d)", ret);
 			return ret;
@@ -1882,6 +1871,49 @@ int send_data_frame(int socket_fd, const char *payload, size_t length,
 	}
 
 	return ret;
+}
+
+static int send_settings_frame(struct http_client_ctx *client, bool ack)
+{
+	uint8_t settings_frame[HTTP_SERVER_FRAME_HEADER_SIZE +
+			       2 * sizeof(struct http_settings_field)];
+	struct http_settings_field *setting;
+	size_t len;
+	int ret;
+
+	if (ack) {
+		encode_frame_header(settings_frame, 0,
+				    HTTP_SERVER_SETTINGS_FRAME,
+				    HTTP_SERVER_FLAG_SETTINGS_ACK, 0);
+		len = HTTP_SERVER_FRAME_HEADER_SIZE;
+	} else {
+		encode_frame_header(settings_frame,
+				    2 * sizeof(struct http_settings_field),
+				    HTTP_SERVER_SETTINGS_FRAME, 0, 0);
+
+		setting = (struct http_settings_field *)
+			(settings_frame + HTTP_SERVER_FRAME_HEADER_SIZE);
+		UNALIGNED_PUT(htons(HTTP_SETTINGS_HEADER_TABLE_SIZE),
+			      &setting->id);
+		UNALIGNED_PUT(0, &setting->value);
+
+		setting++;
+		UNALIGNED_PUT(htons(HTTP_SETTINGS_MAX_CONCURRENT_STREAMS),
+			      &setting->id);
+		UNALIGNED_PUT(htonl(CONFIG_HTTP_SERVER_MAX_STREAMS),
+			      &setting->value);
+
+		len = HTTP_SERVER_FRAME_HEADER_SIZE +
+		      2 * sizeof(struct http_settings_field);
+	}
+
+	ret = sendall(client->fd, settings_frame, len);
+	if (ret < 0) {
+		LOG_DBG("Cannot write to socket (%d)", ret);
+		return ret;
+	}
+
+	return 0;
 }
 
 void print_http_frames(struct http_client_ctx *client)
