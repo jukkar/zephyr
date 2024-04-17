@@ -154,8 +154,8 @@ static int dynamic_post_req(struct http_resource_detail_dynamic *dynamic_detail,
 			    struct http_client_ctx *client)
 {
 	/* offset tells from where the POST params start */
-	char *start = strstr(client->buffer, "\r\n\r\n");
-	int ret, remaining, offset = 0;
+	char *start = client->cursor;
+	int ret, remaining = client->data_len, offset = 0;
 	char *ptr;
 	char tmp[TEMP_BUF_LEN];
 
@@ -163,14 +163,15 @@ static int dynamic_post_req(struct http_resource_detail_dynamic *dynamic_detail,
 		return -ENOENT;
 	}
 
-	ret = http_server_sendall(client->fd, RESPONSE_TEMPLATE_CHUNKED,
-		      sizeof(RESPONSE_TEMPLATE_CHUNKED) - 1);
-	if (ret < 0) {
-		return ret;
+	if (!client->headers_sent) {
+		ret = http_server_sendall(client->fd, RESPONSE_TEMPLATE_CHUNKED,
+			sizeof(RESPONSE_TEMPLATE_CHUNKED) - 1);
+		if (ret < 0) {
+			return ret;
+		}
+		client->headers_sent = true;
 	}
 
-	start += 4; /* skip \r\n\r\n */
-	remaining = strlen(start);
 
 	while (1) {
 		int copy_len, send_len;
@@ -181,6 +182,11 @@ static int dynamic_post_req(struct http_resource_detail_dynamic *dynamic_detail,
 		memcpy(dynamic_detail->data_buffer, ptr, copy_len);
 
 again:
+		if (remaining == 0 &&
+		    client->parser_state != HTTP1_MESSAGE_COMPLETE_STATE) {
+			break;
+		}
+
 		send_len = dynamic_detail->cb(client, dynamic_detail->data_buffer,
 					      copy_len, dynamic_detail->user_data);
 		if (send_len > 0) {
@@ -216,10 +222,12 @@ again:
 		break;
 	}
 
-	ret = http_server_sendall(client->fd, final_chunk,
-				  sizeof(final_chunk) - 1);
-	if (ret < 0) {
-		return ret;
+	if (client->parser_state == HTTP1_MESSAGE_COMPLETE_STATE) {
+		ret = http_server_sendall(client->fd, final_chunk,
+					sizeof(final_chunk) - 1);
+		if (ret < 0) {
+			return ret;
+		}
 	}
 
 	return 0;
@@ -291,12 +299,7 @@ static int on_header_field(struct http_parser *parser, const char *at,
 						   struct http_client_ctx,
 						   parser);
 
-	ctx->parser_header_state = HTTP1_RECEIVING_HEADER_STATE;
-
-	if (length == 7 && strncasecmp(at, "Upgrade", length) == 0) {
-		LOG_DBG("The \"Upgrade: h2c\" header is present.");
-		ctx->has_upgrade_header = true;
-	}
+	ctx->parser_state = HTTP1_RECEIVING_HEADER_STATE;
 
 	return 0;
 }
@@ -307,7 +310,7 @@ static int on_headers_complete(struct http_parser *parser)
 						   struct http_client_ctx,
 						   parser);
 
-	ctx->parser_header_state = HTTP1_RECEIVED_HEADER_STATE;
+	ctx->parser_state = HTTP1_RECEIVED_HEADER_STATE;
 
 	return 0;
 }
@@ -317,12 +320,43 @@ static int on_url(struct http_parser *parser, const char *at, size_t length)
 	struct http_client_ctx *ctx = CONTAINER_OF(parser,
 						   struct http_client_ctx,
 						   parser);
+	size_t offset = strlen(ctx->url_buffer);
 
-	ctx->parser_header_state = HTTP1_WAITING_HEADER_STATE;
+	ctx->parser_state = HTTP1_WAITING_HEADER_STATE;
 
-	strncpy(ctx->url_buffer, at, length);
-	ctx->url_buffer[length] = '\0';
-	LOG_DBG("Requested URL: %s", ctx->url_buffer);
+	if (offset + length > sizeof(ctx->url_buffer) - 1) {
+		LOG_DBG("URL too long to handle");
+		return -EMSGSIZE;
+	}
+
+	memcpy(ctx->url_buffer + offset, at, length);
+	offset += length;
+	ctx->url_buffer[offset] = '\0';
+
+	return 0;
+}
+
+static int on_body(struct http_parser *parser, const char *at, size_t length)
+{
+	struct http_client_ctx *ctx = CONTAINER_OF(parser,
+						   struct http_client_ctx,
+						   parser);
+
+	ctx->parser_state = HTTP1_RECEIVING_DATA_STATE;
+
+	ctx->http1_frag_data_len = length;
+
+	return 0;
+}
+
+static int on_message_complete(struct http_parser *parser)
+{
+	struct http_client_ctx *ctx = CONTAINER_OF(parser,
+						   struct http_client_ctx,
+						   parser);
+
+	ctx->parser_state = HTTP1_MESSAGE_COMPLETE_STATE;
+
 	return 0;
 }
 
@@ -336,7 +370,9 @@ int enter_http1_request(struct http_client_ctx *client)
 	client->parser_settings.on_header_field = on_header_field;
 	client->parser_settings.on_headers_complete = on_headers_complete;
 	client->parser_settings.on_url = on_url;
-	client->parser_header_state = HTTP1_INIT_HEADER_STATE;
+	client->parser_settings.on_body = on_body;
+	client->parser_settings.on_message_complete = on_message_complete;
+	client->parser_state = HTTP1_INIT_HEADER_STATE;
 
 	return 0;
 }
@@ -345,23 +381,49 @@ int handle_http1_request(struct http_server_ctx *server, struct http_client_ctx 
 {
 	int ret, path_len = 0;
 	struct http_resource_detail *detail;
+	bool skip_headers = (client->parser_state < HTTP1_RECEIVING_DATA_STATE);
+	size_t parsed;
 
 	LOG_DBG("HTTP_SERVER_REQUEST");
 
+	parsed = http_parser_execute(&client->parser, &client->parser_settings,
+				     client->cursor, client->data_len);
 
-	http_parser_execute(&client->parser, &client->parser_settings,
-			    client->cursor, client->data_len);
+	if (parsed > client->data_len) {
+		LOG_ERR("HTTP/1 parser error, too much data consumed");
+		return -EBADMSG;
+	}
 
 	if (client->parser.http_errno != HPE_OK) {
 		LOG_ERR("HTTP/1 parsing error, %d", client->parser.http_errno);
 		return -EBADMSG;
 	}
 
-	if (client->parser_header_state != HTTP1_RECEIVED_HEADER_STATE) {
+	if (client->parser_state < HTTP1_RECEIVED_HEADER_STATE) {
+		client->cursor += parsed;
+		client->data_len -= parsed;
+
 		return 0;
 	}
 
 	client->method = client->parser.method;
+	client->has_upgrade_header = client->parser.upgrade;
+
+	if (skip_headers) {
+		LOG_DBG("Requested URL: %s", client->url_buffer);
+
+		size_t frag_headers_len;
+
+		if (parsed < client->http1_frag_data_len) {
+			return -EBADMSG;
+		}
+
+		frag_headers_len = parsed - client->http1_frag_data_len;
+		parsed -= frag_headers_len;
+
+		client->cursor += frag_headers_len;
+		client->data_len -= frag_headers_len;
+	}
 
 	if (client->has_upgrade_header) {
 		return handle_http1_to_http2_upgrade(server, client);
@@ -400,12 +462,14 @@ int handle_http1_request(struct http_server_ctx *server, struct http_client_ctx 
 		}
 	}
 
-	LOG_DBG("Connection closed client #%zd", ARRAY_INDEX(server->clients, client));
+	client->cursor += parsed;
+	client->data_len -= parsed;
 
-	client->cursor += client->data_len;
-	client->data_len = 0;
-
-	enter_http_done_state(server, client);
+	if (client->parser_state == HTTP1_MESSAGE_COMPLETE_STATE) {
+		LOG_DBG("Connection closed client #%zd",
+			ARRAY_INDEX(server->clients, client));
+		enter_http_done_state(server, client);
+	}
 
 	return 0;
 }
