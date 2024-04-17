@@ -214,7 +214,7 @@ static int accept_new_client(int server_fd)
 
 static int close_all_sockets(struct http_server_ctx *ctx)
 {
-	close(ctx->fds[0].fd); /* close eventfd */
+	zsock_close(ctx->fds[0].fd); /* close eventfd */
 	ctx->fds[0].fd = -1;
 
 	for (int i = 1; i < ARRAY_SIZE(ctx->fds); i++) {

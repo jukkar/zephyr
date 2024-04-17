@@ -217,7 +217,7 @@ static void test_tls(void)
 	ptr = (char *)zsock_inet_ntop(AF_INET, &sa.sin_addr, buf, sizeof(buf));
 	zassert_not_equal(ptr, NULL, "inet_ntop() failed (%d)", errno);
 
-	ret = connect(client_fd, (struct sockaddr *)&sa, sizeof(sa));
+	ret = zsock_connect(client_fd, (struct sockaddr *)&sa, sizeof(sa));
 	zassert_not_equal(ret, -1, "failed to connect (%d)", errno);
 
 	ret = zsock_send(client_fd, http1_request, sizeof(http1_request) - 1, 0);
