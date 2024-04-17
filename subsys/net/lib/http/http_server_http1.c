@@ -291,10 +291,23 @@ static int on_header_field(struct http_parser *parser, const char *at,
 						   struct http_client_ctx,
 						   parser);
 
+	ctx->parser_header_state = HTTP1_RECEIVING_HEADER_STATE;
+
 	if (length == 7 && strncasecmp(at, "Upgrade", length) == 0) {
 		LOG_DBG("The \"Upgrade: h2c\" header is present.");
 		ctx->has_upgrade_header = true;
 	}
+
+	return 0;
+}
+
+static int on_headers_complete(struct http_parser *parser)
+{
+	struct http_client_ctx *ctx = CONTAINER_OF(parser,
+						   struct http_client_ctx,
+						   parser);
+
+	ctx->parser_header_state = HTTP1_RECEIVED_HEADER_STATE;
 
 	return 0;
 }
@@ -304,6 +317,9 @@ static int on_url(struct http_parser *parser, const char *at, size_t length)
 	struct http_client_ctx *ctx = CONTAINER_OF(parser,
 						   struct http_client_ctx,
 						   parser);
+
+	ctx->parser_header_state = HTTP1_WAITING_HEADER_STATE;
+
 	strncpy(ctx->url_buffer, at, length);
 	ctx->url_buffer[length] = '\0';
 	LOG_DBG("Requested URL: %s", ctx->url_buffer);
@@ -318,7 +334,9 @@ int enter_http1_request(struct http_client_ctx *client)
 	http_parser_settings_init(&client->parser_settings);
 
 	client->parser_settings.on_header_field = on_header_field;
+	client->parser_settings.on_headers_complete = on_headers_complete;
 	client->parser_settings.on_url = on_url;
+	client->parser_header_state = HTTP1_INIT_HEADER_STATE;
 
 	return 0;
 }
@@ -337,6 +355,10 @@ int handle_http1_request(struct http_server_ctx *server, struct http_client_ctx 
 	if (client->parser.http_errno != HPE_OK) {
 		LOG_ERR("HTTP/1 parsing error, %d", client->parser.http_errno);
 		return -EBADMSG;
+	}
+
+	if (client->parser_header_state != HTTP1_RECEIVED_HEADER_STATE) {
+		return 0;
 	}
 
 	client->method = client->parser.method;

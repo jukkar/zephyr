@@ -114,6 +114,13 @@ enum http_server_state {
 	HTTP_SERVER_DONE_STATE,
 };
 
+enum http1_parser_header_state {
+	HTTP1_INIT_HEADER_STATE,
+	HTTP1_WAITING_HEADER_STATE,
+	HTTP1_RECEIVING_HEADER_STATE,
+	HTTP1_RECEIVED_HEADER_STATE,
+};
+
 struct http_stream_ctx {
 	int stream_id;
 	enum http_stream_state stream_state;
@@ -145,6 +152,7 @@ struct http_client_ctx {
 	unsigned char content_type[CONFIG_HTTP_SERVER_MAX_CONTENT_TYPE_LENGTH];
 	size_t content_len;
 	enum http_method method;
+	enum http1_parser_header_state parser_header_state;
 };
 
 struct http_server_ctx {
