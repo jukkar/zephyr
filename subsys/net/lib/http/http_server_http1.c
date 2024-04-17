@@ -314,6 +314,12 @@ int enter_http1_request(struct http_client_ctx *client)
 {
 	client->server_state = HTTP_SERVER_REQUEST_STATE;
 
+	http_parser_init(&client->parser, HTTP_REQUEST);
+	http_parser_settings_init(&client->parser_settings);
+
+	client->parser_settings.on_header_field = on_header_field;
+	client->parser_settings.on_url = on_url;
+
 	return 0;
 }
 
@@ -324,11 +330,6 @@ int handle_http1_request(struct http_server_ctx *server, struct http_client_ctx 
 
 	LOG_DBG("HTTP_SERVER_REQUEST");
 
-	http_parser_init(&client->parser, HTTP_REQUEST);
-	http_parser_settings_init(&client->parser_settings);
-
-	client->parser_settings.on_header_field = on_header_field;
-	client->parser_settings.on_url = on_url;
 
 	http_parser_execute(&client->parser, &client->parser_settings,
 			    client->cursor, client->data_len);
