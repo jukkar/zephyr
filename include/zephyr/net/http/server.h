@@ -159,6 +159,8 @@ struct http_client_ctx {
 	bool headers_sent;
 };
 
+#define HTTP_SERVER_SOCK_COUNT (1 + HTTP_SERVER_MAX_SERVICES + HTTP_SERVER_MAX_CLIENTS)
+
 struct http_server_ctx {
 	int num_clients;
 	int listen_fds;   /* max value of 1 + MAX_SERVICES */
@@ -167,7 +169,7 @@ struct http_server_ctx {
 	 * then we have the server listen sockets,
 	 * and then the accepted sockets.
 	 */
-	struct pollfd fds[1 + HTTP_SERVER_MAX_SERVICES + HTTP_SERVER_MAX_CLIENTS];
+	struct pollfd fds[HTTP_SERVER_SOCK_COUNT];
 	struct http_client_ctx clients[HTTP_SERVER_MAX_CLIENTS];
 };
 

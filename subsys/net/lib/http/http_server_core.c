@@ -379,7 +379,7 @@ int http_server_start(struct http_server_ctx *ctx)
 	value = 0;
 
 	while (1) {
-		ret = zsock_poll(ctx->fds, ctx->listen_fds + ctx->num_clients, -1);
+		ret = zsock_poll(ctx->fds, HTTP_SERVER_SOCK_COUNT, -1);
 		if (ret < 0) {
 			ret = -errno;
 			LOG_DBG("poll failed (%d)", ret);
