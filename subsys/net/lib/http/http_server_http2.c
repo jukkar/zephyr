@@ -540,16 +540,23 @@ static int enter_http_frame_data_state(struct http_server_ctx *server,
 	struct http_frame *frame = &client->current_frame;
 	struct http_stream_ctx *stream;
 
+	if (frame->stream_identifier == 0) {
+		LOG_DBG("Stream ID 0 is forbidden for data frames.");
+		return -EBADMSG;
+	}
+
 	stream = find_http_stream_context(client, frame->stream_identifier);
-	if (!stream) {
-		LOG_DBG("|| stream ID ||  %d", frame->stream_identifier);
+	if (stream == NULL) {
+		LOG_DBG("No stream context found for ID %d",
+			frame->stream_identifier);
+		return -EBADMSG;
+	}
 
-		stream = allocate_http_stream_context(client, frame->stream_identifier);
-		if (!stream) {
-			LOG_DBG("No available stream slots. Connection closed.");
-
-			return -ENOMEM;
-		}
+	if (stream->stream_state != HTTP_SERVER_STREAM_OPEN &&
+	    stream->stream_state != HTTP_SERVER_STREAM_HALF_CLOSED_REMOTE) {
+		LOG_DBG("Stream ID %d in a wrong state %d", stream->stream_id,
+			stream->stream_state);
+		return -EBADMSG;
 	}
 
 	client->server_state = HTTP_SERVER_FRAME_DATA_STATE;
