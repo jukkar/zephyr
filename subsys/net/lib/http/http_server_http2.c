@@ -31,13 +31,11 @@ static bool settings_ack_flag(unsigned char flags)
 	return (flags & HTTP_SERVER_FLAG_SETTINGS_ACK) != 0;
 }
 
-#if 0
 /* Disabled for now to avoid warning, as temporarily not used. */
 static bool end_headers_flag(unsigned char flags)
 {
 	return (flags & HTTP_SERVER_FLAG_END_HEADERS) != 0;
 }
-#endif
 
 static bool end_stream_flag(unsigned char flags)
 {
@@ -102,6 +100,18 @@ static struct http_stream_ctx *allocate_http_stream_context(
 	}
 
 	return NULL;
+}
+
+static void release_http_stream_context(struct http_client_ctx *client,
+					uint32_t stream_id)
+{
+	ARRAY_FOR_EACH(client->streams, i) {
+		if (client->streams[i].stream_id == stream_id) {
+			client->streams[i].stream_id = 0;
+			client->streams[i].stream_state = HTTP_SERVER_STREAM_IDLE;
+			break;
+		}
+	}
 }
 
 static int add_header_field(struct http_client_ctx *client, uint8_t **buf,
@@ -379,42 +389,52 @@ again:
 }
 
 static int dynamic_post_req_v2(struct http_resource_detail_dynamic *dynamic_detail,
-			       struct http_client_ctx *client)
+			       struct http_client_ctx *client, size_t data_len)
 {
 	struct http_frame *frame = &client->current_frame;
-	int ret, tmp, remaining;
+	int copy_len;
+	int ret = 0;
 
 	if (dynamic_detail == NULL) {
 		return -ENOENT;
 	}
 
-	ret = send_headers_frame(client, HTTP_200_OK, frame->stream_identifier,
-				 dynamic_detail->common.content_encoding);
-	if (ret < 0) {
-		LOG_DBG("Cannot write to socket (%d)", ret);
-		return ret;
+	if (!client->headers_sent) {
+		ret = send_headers_frame(client, HTTP_200_OK,
+					 frame->stream_identifier,
+					 dynamic_detail->common.content_encoding);
+		if (ret < 0) {
+			LOG_DBG("Cannot write to socket (%d)", ret);
+			return ret;
+		}
+
+		client->headers_sent = true;
 	}
 
-	remaining = client->content_len;
-
-	while (1) {
-		int copy_len, send_len;
+	do {
+		int send_len;
 
 		/* Read all the user data and pass it to application. After
 		 * passing all the data, if application returns 0, it means
 		 * that there is no more data to send to client.
 		 */
 
-		copy_len = MIN(remaining, dynamic_detail->data_buffer_len);
-		copy_len = MIN(copy_len, client->data_len);
+		copy_len = MIN(data_len, dynamic_detail->data_buffer_len);
 
 		if (copy_len > 0) {
 			memcpy(dynamic_detail->data_buffer, client->cursor, copy_len);
-			remaining -= copy_len;
+			data_len -= copy_len;
 			client->cursor += copy_len;
 			client->data_len -= copy_len;
 		} else {
-			remaining = 0;
+			data_len = 0;
+			if (frame->length > 0 || !end_stream_flag(frame->flags)) {
+				/* Still have some data left in current stream,
+				* but not in this fragment.
+				*/
+				ret = 0;
+				break;
+			}
 		}
 
 		send_len = dynamic_detail->cb(client,
@@ -428,30 +448,22 @@ static int dynamic_post_req_v2(struct http_resource_detail_dynamic *dynamic_deta
 					      frame->stream_identifier,
 					      0);
 			if (ret < 0) {
+				LOG_DBG("Cannot send data frame (%d)", ret);
 				break;
 			}
-		} else if (send_len == 0) {
-			/* If we do not have anything to send to application,
-			 * then just stop.
-			 */
+		}
+	} while (copy_len > 0);
 
-			/* Application did not get all the data */
-			if (remaining > 0) {
-				continue;
-			}
-
-			ret = 0;
-			break;
+	if (ret == 0 && frame->length == 0 && end_stream_flag(frame->flags)) {
+		/* No more data expected. */
+		ret = send_data_frame(client->fd, NULL, 0,
+				      frame->stream_identifier,
+				      HTTP_SERVER_FLAG_END_STREAM);
+		if (ret < 0) {
+			LOG_DBG("Cannot send last frame (%d)", ret);
 		}
 	}
 
-	tmp = send_data_frame(client->fd, NULL, 0,
-			      frame->stream_identifier,
-			      HTTP_SERVER_FLAG_END_STREAM);
-	if (tmp < 0) {
-		LOG_DBG("Cannot send last frame (%d)", tmp);
-		ret = tmp;
-	}
 
 	return ret;
 }
@@ -739,18 +751,14 @@ error:
 int handle_http_frame_data(struct http_client_ctx *client)
 {
 	struct http_frame *frame = &client->current_frame;
-	int bytes_consumed;
+	size_t data_len;
 	int ret;
-
-	if (client->data_len < frame->length) {
-		return -EAGAIN;
-	}
 
 	LOG_DBG("HTTP_SERVER_FRAME_DATA_STATE");
 
-	print_http_frames(client);
+	data_len = MIN(client->data_len, frame->length);
 
-	bytes_consumed = client->current_frame.length;
+	print_http_frames(client);
 
 	if (client->current_detail == NULL) {
 		/* There is no handler */
@@ -759,14 +767,89 @@ int handle_http_frame_data(struct http_client_ctx *client)
 		return -ENOENT;
 	}
 
+	/* Decrease remaining frame length. Cursor is moved during resource
+	 * processing.
+	 */
+	frame->length -= data_len;
+
 	ret = dynamic_post_req_v2(
 		(struct http_resource_detail_dynamic *)client->current_detail,
-		client);
+		client, data_len);
 	if (ret < 0 && ret == -ENOENT) {
 		ret = send_http2_404(client, frame);
 	}
 
-	return ret;
+	if (ret < 0) {
+		return ret;
+	}
+
+	if (frame->length == 0) {
+		/* Whole frame consumed, expect next one. */
+		client->server_state = HTTP_SERVER_FRAME_HEADER_STATE;
+
+		if (end_stream_flag(frame->flags)) {
+			release_http_stream_context(client, frame->stream_identifier);
+		}
+	}
+
+	return 0;
+}
+
+static int process_header(struct http_client_ctx *client,
+			  struct http_hpack_header_buf *header)
+{
+	if (header->name_len == (sizeof(":method") - 1) &&
+	    memcmp(header->name, ":method", header->name_len) == 0) {
+		/* TODO Improve string to method conversion */
+		if (header->value_len == (sizeof("GET") - 1) &&
+			memcmp(header->value, "GET", header->value_len) == 0) {
+			client->method = HTTP_GET;
+		} else if (header->value_len == (sizeof("POST") - 1) &&
+				memcmp(header->value, "POST", header->value_len) == 0) {
+			client->method = HTTP_POST;
+		} else {
+			/* Unknown method */
+			return -EBADMSG;
+		}
+	} else if (header->name_len == (sizeof(":path") - 1) &&
+		   memcmp(header->name, ":path", header->name_len) == 0) {
+		if (header->value_len > sizeof(client->url_buffer) - 1) {
+			/* URL too long to handle */
+			return -ENOBUFS;
+		}
+
+		memcpy(client->url_buffer, header->value, header->value_len);
+		client->url_buffer[header->value_len] = '\0';
+	} else if (header->name_len == (sizeof("content-type") - 1) &&
+		   memcmp(header->name, "content-type", header->name_len) == 0) {
+		if (header->value_len > sizeof(client->content_type) - 1) {
+			/* Content-type too long to handle */
+			return -ENOBUFS;
+		}
+
+		memcpy(client->content_type, header->value, header->value_len);
+		client->content_type[header->value_len] = '\0';
+	} else if (header->name_len == (sizeof("content-length") - 1) &&
+		   memcmp(header->name, "content-length", header->name_len) == 0) {
+		char len_str[16] = { 0 };
+		char *endptr;
+		unsigned long len;
+
+		memcpy(len_str, header->value, MIN(sizeof(len_str), header->value_len));
+		len_str[sizeof(len_str) - 1] = '\0';
+
+		len = strtoul(len_str, &endptr, 10);
+		if (*endptr != '\0') {
+			return -EINVAL;
+		}
+
+		client->content_len = (size_t)len;
+	} else {
+		/* Just ignore for now. */
+		LOG_DBG("Ignoring field %.*s", (int)header->name_len, header->name);
+	}
+
+	return 0;
 }
 
 int handle_http_frame_headers(struct http_client_ctx *client)
@@ -779,95 +862,43 @@ int handle_http_frame_headers(struct http_client_ctx *client)
 
 	print_http_frames(client);
 
-	/* TODO This is wrong, we can't expect full frame within the buffer */
-	if (client->data_len < frame->length) {
-		return -EAGAIN;
-	}
-
 	while (frame->length > 0) {
 		struct http_hpack_header_buf *header = &client->header_field;
 
 		ret = http_hpack_decode_header(client->cursor, client->data_len,
 					       header);
-		if (ret == -EAGAIN) {
-			goto out;
-		}
-
 		if (ret <= 0) {
-			return -EBADMSG;
+			ret = (ret == 0) ? -EBADMSG : ret;
+			return ret;
 		}
 
-		if (ret > client->current_frame.length) {
+		if (ret > frame->length) {
 			LOG_ERR("Protocol error, frame length exceeded");
 			return -EBADMSG;
 		}
 
-		client->current_frame.length -= ret;
+		frame->length -= ret;
 		client->cursor += ret;
 		client->data_len -= ret;
 
 		LOG_DBG("Parsed header: %.*s %.*s", (int)header->name_len,
 			header->name, (int)header->value_len, header->value);
 
-		/* For now, we're only interested in method and URL. */
-		if (header->name_len == (sizeof(":method") - 1) &&
-		    memcmp(header->name, ":method", header->name_len) == 0) {
-			/* TODO Improve string to method conversion */
-			if (header->value_len == (sizeof("GET") - 1) &&
-			    memcmp(header->value, "GET", header->value_len) == 0) {
-				client->method = HTTP_GET;
-			} else if (header->value_len == (sizeof("POST") - 1) &&
-				   memcmp(header->value, "POST", header->value_len) == 0) {
-				client->method = HTTP_POST;
-			} else {
-				/* Unknown method */
-				return -EBADMSG;
-			}
-
-		} else if (header->name_len == (sizeof(":path") - 1) &&
-			   memcmp(header->name, ":path", header->name_len) == 0) {
-			if (header->value_len > sizeof(client->url_buffer) - 1) {
-				/* URL too long to handle */
-				return -ENOBUFS;
-			}
-
-			memcpy(client->url_buffer, header->value, header->value_len);
-			client->url_buffer[header->value_len] = '\0';
-
-		} else if (header->name_len == (sizeof("content-type") - 1) &&
-			   memcmp(header->name, "content-type", header->name_len) == 0) {
-			if (header->value_len > sizeof(client->content_type) - 1) {
-				/* URL too long to handle */
-				return -ENOBUFS;
-			}
-
-			memcpy(client->content_type, header->value, header->value_len);
-			client->content_type[header->value_len] = '\0';
-
-		} else if (header->name_len == (sizeof("content-length") - 1) &&
-			   memcmp(header->name, "content-length", header->name_len) == 0) {
-			char len_str[16] = { 0 };
-			char *endptr;
-			unsigned long len;
-
-			memcpy(len_str, header->value, MIN(sizeof(len_str), header->value_len));
-			len_str[sizeof(len_str) - 1] = '\0';
-
-			len = strtoul(len_str, &endptr, 10);
-			if (*endptr != '\0') {
-				return -EINVAL;
-			}
-
-			client->content_len = (size_t)len;
-		} else {
-			/* Just ignore for now. */
-			LOG_DBG("Ignoring field %.*s", (int)header->name_len, header->name);
+		ret = process_header(client, header);
+		if (ret < 0) {
+			return ret;
 		}
 	}
 
-	/* TODO This should be done only after headers frame is complete, i. e.
-	 * current_frame.length == 0.
-	 */
+	if (!end_headers_flag(frame->flags)) {
+		/* More headers to come in the continuation frame. */
+		client->server_state = HTTP_SERVER_FRAME_HEADER_STATE;
+
+		/* TODO Implement continuation frame processing. */
+
+		return 0;
+	}
+
 	detail = get_resource_detail(client->url_buffer, &path_len);
 	if (detail != NULL) {
 		detail->path_len = path_len;
@@ -895,9 +926,12 @@ int handle_http_frame_headers(struct http_client_ctx *client)
 		}
 	}
 
+	if (end_stream_flag(frame->flags)) {
+		release_http_stream_context(client, frame->stream_identifier);
+	}
+
 	client->server_state = HTTP_SERVER_FRAME_HEADER_STATE;
 
-out:
 	return 0;
 }
 
