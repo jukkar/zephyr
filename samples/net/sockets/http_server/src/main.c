@@ -46,13 +46,17 @@ static int dyn_handler(struct http_client_ctx *client,
 #define MAX_TEMP_PRINT_LEN 32
 	static char print_str[MAX_TEMP_PRINT_LEN];
 	enum http_method method = client->method;
+	static size_t processed;
 
 	__ASSERT_NO_MSG(buffer != NULL);
 
 	if (len == 0) {
-		LOG_DBG("All data received.");
+		LOG_DBG("All data received (%zd bytes).", processed);
+		processed = 0;
 		return 0;
 	}
+
+	processed += len;
 
 	snprintf(print_str, sizeof(print_str), "%s received (%zd bytes)",
 		 http_method_str(method), len);
