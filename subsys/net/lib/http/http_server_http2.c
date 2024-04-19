@@ -95,6 +95,8 @@ static struct http_stream_ctx *allocate_http_stream_context(
 		if (client->streams[i].stream_state == HTTP_SERVER_STREAM_IDLE) {
 			client->streams[i].stream_id = stream_id;
 			client->streams[i].stream_state = HTTP_SERVER_STREAM_OPEN;
+			client->streams[i].window_size =
+				HTTP_SERVER_INITIAL_WINDOW_SIZE;
 			return &client->streams[i];
 		}
 	}
@@ -251,6 +253,41 @@ int send_settings_frame(struct http_client_ctx *client, bool ack)
 	}
 
 	ret = http_server_sendall(client->fd, settings_frame, len);
+	if (ret < 0) {
+		LOG_DBG("Cannot write to socket (%d)", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
+int send_window_update_frame(struct http_client_ctx *client,
+			     struct http_stream_ctx *stream)
+{
+	uint8_t window_update_frame[HTTP_SERVER_FRAME_HEADER_SIZE +
+				    sizeof(uint32_t)];
+	uint32_t window_update;
+	uint32_t stream_id;
+	int ret;
+
+	if (stream != NULL) {
+		window_update = HTTP_SERVER_INITIAL_WINDOW_SIZE - stream->window_size;
+		stream->window_size = HTTP_SERVER_INITIAL_WINDOW_SIZE;
+		stream_id = stream->stream_id;
+	} else {
+		window_update = HTTP_SERVER_INITIAL_WINDOW_SIZE - client->window_size;
+		client->window_size = HTTP_SERVER_INITIAL_WINDOW_SIZE;
+		stream_id = 0;
+	}
+
+	encode_frame_header(window_update_frame, sizeof(uint32_t),
+			    HTTP_SERVER_WINDOW_UPDATE_FRAME,
+			    0, stream_id);
+	sys_put_be32(window_update,
+		     window_update_frame + HTTP_SERVER_FRAME_HEADER_SIZE);
+
+	ret = http_server_sendall(client->fd, window_update_frame,
+				  sizeof(window_update_frame));
 	if (ret < 0) {
 		LOG_DBG("Cannot write to socket (%d)", ret);
 		return ret;
@@ -594,6 +631,8 @@ static int enter_http_frame_data_state(struct http_server_ctx *server,
 		return -EBADMSG;
 	}
 
+	stream->window_size -= frame->length;
+	client->window_size -= frame->length;
 	client->server_state = HTTP_SERVER_FRAME_DATA_STATE;
 
 	return 0;
@@ -830,6 +869,25 @@ int handle_http_frame_data(struct http_client_ctx *client)
 	}
 
 	if (frame->length == 0) {
+		struct http_stream_ctx *stream =
+			find_http_stream_context(client, frame->stream_identifier);
+
+		if (stream == NULL) {
+			LOG_DBG("No stream context found for ID %d",
+				frame->stream_identifier);
+			return -EBADMSG;
+		}
+
+		ret = send_window_update_frame(client, stream);
+		if (ret < 0) {
+			return ret;
+		}
+
+		ret = send_window_update_frame(client, NULL);
+		if (ret < 0) {
+			return ret;
+		}
+
 		/* Whole frame consumed, expect next one. */
 		client->server_state = HTTP_SERVER_FRAME_HEADER_STATE;
 
