@@ -113,9 +113,12 @@ enum http1_parser_state {
 	HTTP1_MESSAGE_COMPLETE_STATE,
 };
 
+#define HTTP_SERVER_INITIAL_WINDOW_SIZE 65536
+
 struct http_stream_ctx {
 	int stream_id;
 	enum http_stream_state stream_state;
+	int window_size; /**< Stream-level window size. */
 };
 
 struct http_frame {
@@ -133,6 +136,7 @@ struct http_client_ctx {
 	unsigned char buffer[HTTP_SERVER_CLIENT_BUFFER_SIZE];
 	unsigned char *cursor; /**< Cursor indicating currently processed byte. */
 	size_t data_len; /**< Data left to process in the buffer. */
+	int window_size; /**< Connection-level window size.  */
 	enum http_server_state server_state;
 	struct http_frame current_frame;
 	struct http_resource_detail *current_detail;

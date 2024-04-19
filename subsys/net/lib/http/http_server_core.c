@@ -236,6 +236,7 @@ static void init_client_ctx(struct http_client_ctx *client, int new_socket)
 	client->server_state = HTTP_SERVER_PREFACE_STATE;
 	client->has_upgrade_header = false;
 	client->preface_sent = false;
+	client->window_size = HTTP_SERVER_INITIAL_WINDOW_SIZE;
 
 	memset(client->buffer, 0, sizeof(client->buffer));
 	memset(client->url_buffer, 0, sizeof(client->url_buffer));
