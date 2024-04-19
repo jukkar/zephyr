@@ -10,19 +10,9 @@
 
 #include <stdint.h>
 
-#if defined(CONFIG_POSIX_API)
-
-#include <stddef.h>
-#include <poll.h>
-
-#else
-
-#include <zephyr/posix/poll.h>
-
-#endif
-
 #include <zephyr/net/http/parser.h>
 #include <zephyr/net/http/hpack.h>
+#include <zephyr/net/socket.h>
 
 #define HTTP_SERVER_CLIENT_BUFFER_SIZE CONFIG_HTTP_SERVER_CLIENT_BUFFER_SIZE
 #define HTTP_SERVER_MAX_SERVICES       CONFIG_HTTP_NUM_SERVICES
@@ -169,7 +159,7 @@ struct http_server_ctx {
 	 * then we have the server listen sockets,
 	 * and then the accepted sockets.
 	 */
-	struct pollfd fds[HTTP_SERVER_SOCK_COUNT];
+	struct zsock_pollfd fds[HTTP_SERVER_SOCK_COUNT];
 	struct http_client_ctx clients[HTTP_SERVER_MAX_CLIENTS];
 };
 
