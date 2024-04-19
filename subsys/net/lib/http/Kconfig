@@ -117,6 +117,15 @@ config HTTP_SERVER_POST_REQUEST_STORAGE_LIMIT
 	help
 	  This setting determines the maximum size of a frame that the server can handle.
 
+config HTTP_SERVER_CLIENT_INACTIVITY_TIMEOUT
+	int "Client inactivity timeout (seconds)"
+	default 10
+	range 1 86400
+	help
+	  This timeout specifies maximum time the client may remain inactive
+	  (i. e. not sending or receiving any data) before the server drops the
+	  connection.
+
 #endif
 
 module = NET_HTTP

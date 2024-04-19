@@ -26,7 +26,8 @@ static const char final_chunk[] = "0\r\n\r\n";
 static const char *crlf = &final_chunk[3];
 
 static int handle_http1_static_resource(
-	struct http_resource_detail_static *static_detail, int client_fd)
+	struct http_resource_detail_static *static_detail,
+	struct http_client_ctx *client)
 {
 #define RESPONSE_TEMPLATE			\
 	"HTTP/1.1 200 OK\r\n"			\
@@ -56,13 +57,13 @@ static int handle_http1_static_resource(
 				 RESPONSE_TEMPLATE "\r\n", len);
 		}
 
-		ret = http_server_sendall(client_fd, http_response,
+		ret = http_server_sendall(client, http_response,
 					  strlen(http_response));
 		if (ret < 0) {
 			return ret;
 		}
 
-		ret = http_server_sendall(client_fd, data, len);
+		ret = http_server_sendall(client, data, len);
 		if (ret < 0) {
 			return ret;
 		}
@@ -88,7 +89,7 @@ static int dynamic_get_req(struct http_resource_detail_dynamic *dynamic_detail,
 	char *ptr;
 	char tmp[TEMP_BUF_LEN];
 
-	ret = http_server_sendall(client->fd, RESPONSE_TEMPLATE_CHUNKED,
+	ret = http_server_sendall(client, RESPONSE_TEMPLATE_CHUNKED,
 				  sizeof(RESPONSE_TEMPLATE_CHUNKED) - 1);
 	if (ret < 0) {
 		return ret;
@@ -110,19 +111,19 @@ again:
 					      copy_len, dynamic_detail->user_data);
 		if (send_len > 0) {
 			ret = snprintk(tmp, sizeof(tmp), "%x\r\n", send_len);
-			ret = http_server_sendall(client->fd, tmp, ret);
+			ret = http_server_sendall(client, tmp, ret);
 			if (ret < 0) {
 				return ret;
 			}
 
-			ret = http_server_sendall(client->fd,
+			ret = http_server_sendall(client,
 						  dynamic_detail->data_buffer,
 						  send_len);
 			if (ret < 0) {
 				return ret;
 			}
 
-			(void)http_server_sendall(client->fd, crlf, 2);
+			(void)http_server_sendall(client, crlf, 2);
 
 			offset += copy_len;
 			remaining -= copy_len;
@@ -141,7 +142,7 @@ again:
 		break;
 	}
 
-	ret = http_server_sendall(client->fd, final_chunk,
+	ret = http_server_sendall(client, final_chunk,
 				  sizeof(final_chunk) - 1);
 	if (ret < 0) {
 		return ret;
@@ -164,7 +165,7 @@ static int dynamic_post_req(struct http_resource_detail_dynamic *dynamic_detail,
 	}
 
 	if (!client->headers_sent) {
-		ret = http_server_sendall(client->fd, RESPONSE_TEMPLATE_CHUNKED,
+		ret = http_server_sendall(client, RESPONSE_TEMPLATE_CHUNKED,
 			sizeof(RESPONSE_TEMPLATE_CHUNKED) - 1);
 		if (ret < 0) {
 			return ret;
@@ -191,19 +192,19 @@ again:
 					      copy_len, dynamic_detail->user_data);
 		if (send_len > 0) {
 			ret = snprintk(tmp, sizeof(tmp), "%x\r\n", send_len);
-			ret = http_server_sendall(client->fd, tmp, ret);
+			ret = http_server_sendall(client, tmp, ret);
 			if (ret < 0) {
 				return ret;
 			}
 
-			ret = http_server_sendall(client->fd,
+			ret = http_server_sendall(client,
 						  dynamic_detail->data_buffer,
 						  send_len);
 			if (ret < 0) {
 				return ret;
 			}
 
-			(void)http_server_sendall(client->fd, crlf, 2);
+			(void)http_server_sendall(client, crlf, 2);
 
 			offset += copy_len;
 			remaining -= copy_len;
@@ -223,7 +224,7 @@ again:
 	}
 
 	if (client->parser_state == HTTP1_MESSAGE_COMPLETE_STATE) {
-		ret = http_server_sendall(client->fd, final_chunk,
+		ret = http_server_sendall(client, final_chunk,
 					sizeof(final_chunk) - 1);
 		if (ret < 0) {
 			return ret;
@@ -254,7 +255,7 @@ static int handle_http1_dynamic_resource(
 	case HTTP_HEAD:
 		if (user_method & BIT(HTTP_HEAD)) {
 			ret = http_server_sendall(
-					client->fd, RESPONSE_TEMPLATE_DYNAMIC,
+					client, RESPONSE_TEMPLATE_DYNAMIC,
 					sizeof(RESPONSE_TEMPLATE_DYNAMIC) - 1);
 			if (ret < 0) {
 				return ret;
@@ -438,7 +439,7 @@ int handle_http1_request(struct http_server_ctx *server, struct http_client_ctx 
 		if (detail->type == HTTP_RESOURCE_TYPE_STATIC) {
 			ret = handle_http1_static_resource(
 				(struct http_resource_detail_static *)detail,
-				client->fd);
+				client);
 			if (ret < 0) {
 				return ret;
 			}
@@ -456,7 +457,7 @@ int handle_http1_request(struct http_server_ctx *server, struct http_client_ctx 
 			"Content-Length: 9\r\n\r\n"
 			"Not Found";
 
-		ret = http_server_sendall(client->fd, not_found_response,
+		ret = http_server_sendall(client, not_found_response,
 					  sizeof(not_found_response) - 1);
 		if (ret < 0) {
 			LOG_DBG("Cannot write to socket (%d)", ret);

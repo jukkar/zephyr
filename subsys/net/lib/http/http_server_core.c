@@ -26,6 +26,7 @@ LOG_MODULE_REGISTER(net_http_server, CONFIG_NET_HTTP_SERVER_LOG_LEVEL);
 #include "headers/server_internal.h"
 
 #define INVALID_SOCK -1
+#define INACTIVITY_TIMEOUT K_SECONDS(CONFIG_HTTP_SERVER_CLIENT_INACTIVITY_TIMEOUT)
 
 int http_server_init(struct http_server_ctx *ctx)
 {
@@ -229,31 +230,15 @@ static int close_all_sockets(struct http_server_ctx *ctx)
 	return 0;
 }
 
-static void init_client_ctx(struct http_client_ctx *client, int new_socket)
-{
-	client->fd = new_socket;
-	client->data_len = 0;
-	client->server_state = HTTP_SERVER_PREFACE_STATE;
-	client->has_upgrade_header = false;
-	client->preface_sent = false;
-	client->window_size = HTTP_SERVER_INITIAL_WINDOW_SIZE;
-
-	memset(client->buffer, 0, sizeof(client->buffer));
-	memset(client->url_buffer, 0, sizeof(client->url_buffer));
-
-	ARRAY_FOR_EACH(client->streams, i) {
-		client->streams[i].stream_state = HTTP_SERVER_STREAM_IDLE;
-		client->streams[i].stream_id = 0;
-	}
-}
-
 static void close_client_connection(struct http_server_ctx *server,
 				    struct http_client_ctx *client)
 {
 	int i;
+	struct k_work_sync sync;
 
 	__ASSERT_NO_MSG(IS_ARRAY_ELEMENT(server->clients, client));
 
+	k_work_cancel_delayable_sync(&client->inactivity_timer, &sync);
 	zsock_close(client->fd);
 
 	server->num_clients--;
@@ -266,6 +251,48 @@ static void close_client_connection(struct http_server_ctx *server,
 	}
 
 	memset(client, 0, sizeof(struct http_client_ctx));
+	client->fd = INVALID_SOCK;
+}
+
+static void client_timeout(struct k_work *work)
+{
+	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
+	struct http_client_ctx *client =
+		CONTAINER_OF(dwork, struct http_client_ctx, inactivity_timer);
+
+	LOG_DBG("Client %p timeout", client);
+
+	/* Shutdown the socket. This will be detected by poll() and a proper
+	 * cleanup will proceed.
+	 */
+	(void)zsock_shutdown(client->fd, ZSOCK_SHUT_RD);
+}
+
+void http_client_timer_restart(struct http_client_ctx *client)
+{
+	__ASSERT_NO_MSG(IS_ARRAY_ELEMENT(server->clients, client));
+
+	k_work_reschedule(&client->inactivity_timer, INACTIVITY_TIMEOUT);
+}
+
+static void init_client_ctx(struct http_client_ctx *client, int new_socket)
+{
+	client->fd = new_socket;
+	client->data_len = 0;
+	client->server_state = HTTP_SERVER_PREFACE_STATE;
+	client->has_upgrade_header = false;
+	client->preface_sent = false;
+	client->window_size = HTTP_SERVER_INITIAL_WINDOW_SIZE;
+
+	memset(client->buffer, 0, sizeof(client->buffer));
+	memset(client->url_buffer, 0, sizeof(client->url_buffer));
+	k_work_init_delayable(&client->inactivity_timer, client_timeout);
+	http_client_timer_restart(client);
+
+	ARRAY_FOR_EACH(client->streams, i) {
+		client->streams[i].stream_state = HTTP_SERVER_STREAM_IDLE;
+		client->streams[i].stream_id = 0;
+	}
 }
 
 static int handle_http_preface(struct http_server_ctx *server,
@@ -494,6 +521,8 @@ int http_server_start(struct http_server_ctx *ctx)
 
 			client->data_len += ret;
 
+			http_client_timer_restart(client);
+
 			ret = handle_http_request(ctx, client);
 			if (ret < 0 && ret != -EAGAIN) {
 				if (ret == -ENOTCONN) {
@@ -572,10 +601,10 @@ struct http_resource_detail *get_resource_detail(const char *path,
 	return NULL;
 }
 
-int http_server_sendall(int sock, const void *buf, size_t len)
+int http_server_sendall(struct http_client_ctx *client, const void *buf, size_t len)
 {
 	while (len) {
-		ssize_t out_len = zsock_send(sock, buf, len, 0);
+		ssize_t out_len = zsock_send(client->fd, buf, len, 0);
 
 		if (out_len < 0) {
 			return -errno;
@@ -583,6 +612,8 @@ int http_server_sendall(int sock, const void *buf, size_t len)
 
 		buf = (const char *)buf + out_len;
 		len -= out_len;
+
+		http_client_timer_restart(client);
 	}
 
 	return 0;

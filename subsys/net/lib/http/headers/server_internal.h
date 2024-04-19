@@ -41,7 +41,8 @@ int enter_http_done_state(struct http_server_ctx *server,
 
 /* Others */
 struct http_resource_detail *get_resource_detail(const char *path, int *len);
-int http_server_sendall(int sock, const void *buf, size_t len);
+int http_server_sendall(struct http_client_ctx *client, const void *buf, size_t len);
+void http_client_timer_restart(struct http_client_ctx *client);
 
 /* TODO Could be static, but currently used in tests. */
 int parse_http_frame_header(struct http_client_ctx *client);
