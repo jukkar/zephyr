@@ -147,7 +147,7 @@ static void encode_frame_header(uint8_t *buf, uint32_t payload_len,
 
 static int send_headers_frame(struct http_client_ctx *client,
 			      enum http_status status, uint32_t stream_id,
-			      const char *content_encoding)
+			      const char *content_encoding, uint8_t flags)
 {
 	uint8_t headers_frame[64];
 	uint8_t status_str[4];
@@ -175,9 +175,10 @@ static int send_headers_frame(struct http_client_ctx *client,
 	}
 
 	payload_len = sizeof(headers_frame) - buflen - HTTP_SERVER_FRAME_HEADER_SIZE;
+	flags |= HTTP_SERVER_FLAG_END_HEADERS;
 
 	encode_frame_header(headers_frame, payload_len, HTTP_SERVER_HEADERS_FRAME,
-			    HTTP_SERVER_FLAG_END_HEADERS, stream_id);
+			    flags, stream_id);
 
 	ret = http_server_sendall(client->fd, headers_frame,
 				  payload_len + HTTP_SERVER_FRAME_HEADER_SIZE);
@@ -264,7 +265,7 @@ static int send_http2_404(struct http_client_ctx *client,
 	int ret;
 
 	ret = send_headers_frame(client, HTTP_404_NOT_FOUND,
-				 frame->stream_identifier, NULL);
+				 frame->stream_identifier, NULL, 0);
 	if (ret < 0) {
 		LOG_DBG("Cannot write to socket (%d)", ret);
 		return ret;
@@ -296,7 +297,7 @@ static int handle_http2_static_resource(
 	content_len = static_detail->static_data_len;
 
 	ret = send_headers_frame(client, HTTP_200_OK, frame->stream_identifier,
-				 static_detail->common.content_encoding);
+				 static_detail->common.content_encoding, 0);
 	if (ret < 0) {
 		LOG_DBG("Cannot write to socket (%d)", ret);
 		goto out;
@@ -329,7 +330,7 @@ static int dynamic_get_req_v2(struct http_resource_detail_dynamic *dynamic_detai
 	char *ptr;
 
 	ret = send_headers_frame(client, HTTP_200_OK, frame->stream_identifier,
-				 dynamic_detail->common.content_encoding);
+				 dynamic_detail->common.content_encoding, 0);
 	if (ret < 0) {
 		LOG_DBG("Cannot write to socket (%d)", ret);
 		return ret;
@@ -400,18 +401,6 @@ static int dynamic_post_req_v2(struct http_resource_detail_dynamic *dynamic_deta
 		return -ENOENT;
 	}
 
-	if (!client->headers_sent) {
-		ret = send_headers_frame(client, HTTP_200_OK,
-					 frame->stream_identifier,
-					 dynamic_detail->common.content_encoding);
-		if (ret < 0) {
-			LOG_DBG("Cannot write to socket (%d)", ret);
-			return ret;
-		}
-
-		client->headers_sent = true;
-	}
-
 	data_len = MIN(frame->length, client->data_len);
 
 	do {
@@ -446,26 +435,56 @@ static int dynamic_post_req_v2(struct http_resource_detail_dynamic *dynamic_deta
 					      copy_len,
 					      dynamic_detail->user_data);
 		if (send_len > 0) {
+			uint8_t flags = 0;
+
+			if (!client->headers_sent) {
+				ret = send_headers_frame(
+					client, HTTP_200_OK, frame->stream_identifier,
+					dynamic_detail->common.content_encoding, 0);
+				if (ret < 0) {
+					LOG_DBG("Cannot write to socket (%d)", ret);
+					return ret;
+				}
+
+				client->headers_sent = true;
+			}
+
+			/* In case no more data is available, that was the last
+			 * callback call, so we can include END_STREAM flag.
+			 */
+			if (frame->length == 0 && end_stream_flag(frame->flags)) {
+				flags = HTTP_SERVER_FLAG_END_STREAM;
+			}
+
 			ret = send_data_frame(client->fd,
 					      dynamic_detail->data_buffer,
 					      send_len,
 					      frame->stream_identifier,
-					      0);
+					      flags);
 			if (ret < 0) {
 				LOG_DBG("Cannot send data frame (%d)", ret);
-				break;
+				return ret;
 			}
 		}
 	} while (copy_len > 0);
 
-	if (ret == 0 && frame->length == 0 && end_stream_flag(frame->flags)) {
-		/* No more data expected. */
-		ret = send_data_frame(client->fd, NULL, 0,
-				      frame->stream_identifier,
-				      HTTP_SERVER_FLAG_END_STREAM);
+
+
+	if (frame->length == 0 && end_stream_flag(frame->flags) &&
+	    !client->headers_sent) {
+		/* The callback did not report any data to send, therefore send
+		 * headers frame now, including END_STREAM flag.
+		 */
+		ret = send_headers_frame(
+			client, HTTP_200_OK, frame->stream_identifier,
+			dynamic_detail->common.content_encoding,
+			HTTP_SERVER_FLAG_END_STREAM);
 		if (ret < 0) {
-			LOG_DBG("Cannot send last frame (%d)", ret);
+			LOG_DBG("Cannot write to socket (%d)", ret);
+			return ret;
 		}
+
+		client->headers_sent = true;
 	}
 
 
