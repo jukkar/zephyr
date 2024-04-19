@@ -389,9 +389,10 @@ again:
 }
 
 static int dynamic_post_req_v2(struct http_resource_detail_dynamic *dynamic_detail,
-			       struct http_client_ctx *client, size_t data_len)
+			       struct http_client_ctx *client)
 {
 	struct http_frame *frame = &client->current_frame;
+	size_t data_len;
 	int copy_len;
 	int ret = 0;
 
@@ -411,6 +412,8 @@ static int dynamic_post_req_v2(struct http_resource_detail_dynamic *dynamic_deta
 		client->headers_sent = true;
 	}
 
+	data_len = MIN(frame->length, client->data_len);
+
 	do {
 		int send_len;
 
@@ -426,6 +429,7 @@ static int dynamic_post_req_v2(struct http_resource_detail_dynamic *dynamic_deta
 			data_len -= copy_len;
 			client->cursor += copy_len;
 			client->data_len -= copy_len;
+			frame->length -= copy_len;
 		} else {
 			data_len = 0;
 			if (frame->length > 0 || !end_stream_flag(frame->flags)) {
@@ -691,31 +695,41 @@ int handle_http1_to_http2_upgrade(struct http_server_ctx *server,
 		"Connection: Upgrade\r\n"
 		"Upgrade: h2c\r\n"
 		"\r\n";
-	struct http_frame frame = {
-		/* The HTTP/1.1 request that is sent prior to upgrade is
-		 * assigned a stream identifier of 1.
-		 */
-		.stream_identifier = 1
-	};
+	struct http_frame *frame = &client->current_frame;
 	struct http_resource_detail *detail;
 	int path_len;
 	int ret;
 
-	ret = http_server_sendall(client->fd, switching_protocols,
-				  sizeof(switching_protocols) - 1);
-	if (ret < 0) {
-		goto error;
-	}
-
-	/* The first HTTP/2 frame sent by the server MUST be a server connection
-	 * preface.
+	/* Create an artificial Data frame, so that we can proceed with HTTP2
+	 * processing. The HTTP/1.1 request that is sent prior to upgrade is
+	 * assigned a stream identifier of 1.
 	 */
-	ret = send_settings_frame(client, false);
-	if (ret < 0) {
-		goto error;
+	frame->stream_identifier = 1;
+	frame->type = HTTP_SERVER_DATA_FRAME;
+	frame->length = client->http1_frag_data_len;
+	if (client->parser_state == HTTP1_MESSAGE_COMPLETE_STATE) {
+		frame->flags = HTTP_SERVER_FLAG_END_STREAM;
+	} else {
+		frame->flags = 0;
 	}
 
-	client->preface_sent = true;
+	if (!client->preface_sent) {
+		ret = http_server_sendall(client->fd, switching_protocols,
+					  sizeof(switching_protocols) - 1);
+		if (ret < 0) {
+			goto error;
+		}
+
+		/* The first HTTP/2 frame sent by the server MUST be a server connection
+		* preface.
+		*/
+		ret = send_settings_frame(client, false);
+		if (ret < 0) {
+			goto error;
+		}
+
+		client->preface_sent = true;
+	}
 
 	detail = get_resource_detail(client->url_buffer, &path_len);
 	if (detail != NULL) {
@@ -724,23 +738,44 @@ int handle_http1_to_http2_upgrade(struct http_server_ctx *server,
 		if (detail->type == HTTP_RESOURCE_TYPE_STATIC) {
 			ret = handle_http2_static_resource(
 				(struct http_resource_detail_static *)detail,
-				&frame, client);
+				frame, client);
 			if (ret < 0) {
 				goto error;
 			}
-		}
+		} else if (detail->type == HTTP_RESOURCE_TYPE_DYNAMIC) {
+			ret = handle_http2_dynamic_resource(
+				(struct http_resource_detail_dynamic *)detail,
+				frame, client);
+			if (ret < 0) {
+				goto error;
+			}
 
-		/* TODO: implement POST when using upgrade method */
+			if (client->method == HTTP_POST) {
+				ret = dynamic_post_req_v2(
+					(struct http_resource_detail_dynamic *)detail,
+					client);
+				if (ret < 0) {
+					goto error;
+				}
+			}
+
+		}
 	} else {
-		ret = send_http2_404(client, &frame);
+		ret = send_http2_404(client, frame);
 		if (ret < 0) {
 			goto error;
 		}
 	}
 
-	client->server_state = HTTP_SERVER_PREFACE_STATE;
-	client->cursor += client->data_len;
-	client->data_len = 0;
+	/* Only after the complete HTTP1 payload has been processed, switch
+	 * to HTTP2.
+	 */
+	if (client->parser_state == HTTP1_MESSAGE_COMPLETE_STATE) {
+		client->current_detail = NULL;
+		client->server_state = HTTP_SERVER_PREFACE_STATE;
+		client->cursor += client->data_len;
+		client->data_len = 0;
+	}
 
 	return 0;
 
@@ -751,12 +786,9 @@ error:
 int handle_http_frame_data(struct http_client_ctx *client)
 {
 	struct http_frame *frame = &client->current_frame;
-	size_t data_len;
 	int ret;
 
 	LOG_DBG("HTTP_SERVER_FRAME_DATA_STATE");
-
-	data_len = MIN(client->data_len, frame->length);
 
 	print_http_frames(client);
 
@@ -767,14 +799,9 @@ int handle_http_frame_data(struct http_client_ctx *client)
 		return -ENOENT;
 	}
 
-	/* Decrease remaining frame length. Cursor is moved during resource
-	 * processing.
-	 */
-	frame->length -= data_len;
-
 	ret = dynamic_post_req_v2(
 		(struct http_resource_detail_dynamic *)client->current_detail,
-		client, data_len);
+		client);
 	if (ret < 0 && ret == -ENOENT) {
 		ret = send_http2_404(client, frame);
 	}
@@ -788,6 +815,7 @@ int handle_http_frame_data(struct http_client_ctx *client)
 		client->server_state = HTTP_SERVER_FRAME_HEADER_STATE;
 
 		if (end_stream_flag(frame->flags)) {
+			client->current_detail = NULL;
 			release_http_stream_context(client, frame->stream_identifier);
 		}
 	}

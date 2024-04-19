@@ -344,7 +344,7 @@ static int on_body(struct http_parser *parser, const char *at, size_t length)
 
 	ctx->parser_state = HTTP1_RECEIVING_DATA_STATE;
 
-	ctx->http1_frag_data_len = length;
+	ctx->http1_frag_data_len += length;
 
 	return 0;
 }
@@ -385,6 +385,8 @@ int handle_http1_request(struct http_server_ctx *server, struct http_client_ctx 
 	size_t parsed;
 
 	LOG_DBG("HTTP_SERVER_REQUEST");
+
+	client->http1_frag_data_len = 0;
 
 	parsed = http_parser_execute(&client->parser, &client->parser_settings,
 				     client->cursor, client->data_len);
