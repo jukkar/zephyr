@@ -182,7 +182,7 @@ static int send_headers_frame(struct http_client_ctx *client,
 	encode_frame_header(headers_frame, payload_len, HTTP_SERVER_HEADERS_FRAME,
 			    flags, stream_id);
 
-	ret = http_server_sendall(client->fd, headers_frame,
+	ret = http_server_sendall(client, headers_frame,
 				  payload_len + HTTP_SERVER_FRAME_HEADER_SIZE);
 	if (ret < 0) {
 		LOG_DBG("Cannot write to socket (%d)", ret);
@@ -192,8 +192,8 @@ static int send_headers_frame(struct http_client_ctx *client,
 	return 0;
 }
 
-static int send_data_frame(int socket_fd, const char *payload, size_t length,
-			   uint32_t stream_id, uint8_t flags)
+static int send_data_frame(struct http_client_ctx *client, const char *payload,
+			   size_t length, uint32_t stream_id, uint8_t flags)
 {
 	uint8_t frame_header[HTTP_SERVER_FRAME_HEADER_SIZE];
 	int ret;
@@ -203,12 +203,12 @@ static int send_data_frame(int socket_fd, const char *payload, size_t length,
 			    HTTP_SERVER_FLAG_END_STREAM : 0,
 			    stream_id);
 
-	ret = http_server_sendall(socket_fd, frame_header, sizeof(frame_header));
+	ret = http_server_sendall(client, frame_header, sizeof(frame_header));
 	if (ret < 0) {
 		LOG_DBG("Cannot write to socket (%d)", ret);
 	} else {
 		if (payload != NULL && length > 0) {
-			ret = http_server_sendall(socket_fd, payload, length);
+			ret = http_server_sendall(client, payload, length);
 			if (ret < 0) {
 				LOG_DBG("Cannot write to socket (%d)", ret);
 			}
@@ -252,7 +252,7 @@ int send_settings_frame(struct http_client_ctx *client, bool ack)
 		      2 * sizeof(struct http_settings_field);
 	}
 
-	ret = http_server_sendall(client->fd, settings_frame, len);
+	ret = http_server_sendall(client, settings_frame, len);
 	if (ret < 0) {
 		LOG_DBG("Cannot write to socket (%d)", ret);
 		return ret;
@@ -286,7 +286,7 @@ int send_window_update_frame(struct http_client_ctx *client,
 	sys_put_be32(window_update,
 		     window_update_frame + HTTP_SERVER_FRAME_HEADER_SIZE);
 
-	ret = http_server_sendall(client->fd, window_update_frame,
+	ret = http_server_sendall(client, window_update_frame,
 				  sizeof(window_update_frame));
 	if (ret < 0) {
 		LOG_DBG("Cannot write to socket (%d)", ret);
@@ -308,7 +308,7 @@ static int send_http2_404(struct http_client_ctx *client,
 		return ret;
 	}
 
-	ret = send_data_frame(client->fd, content_404, sizeof(content_404),
+	ret = send_data_frame(client, content_404, sizeof(content_404),
 			      frame->stream_identifier,
 			      HTTP_SERVER_FLAG_END_STREAM);
 	if (ret < 0) {
@@ -340,14 +340,14 @@ static int handle_http2_static_resource(
 		goto out;
 	}
 
-	ret = send_data_frame(client->fd, content_200, content_len,
+	ret = send_data_frame(client, content_200, content_len,
 			      frame->stream_identifier, 0);
 	if (ret < 0) {
 		LOG_DBG("Cannot write to socket (%d)", ret);
 		goto out;
 	}
 
-	ret = send_data_frame(client->fd, NULL, 0,
+	ret = send_data_frame(client, NULL, 0,
 			      frame->stream_identifier,
 			      HTTP_SERVER_FLAG_END_STREAM);
 	if (ret < 0) {
@@ -390,7 +390,7 @@ again:
 					      copy_len,
 					      dynamic_detail->user_data);
 		if (send_len > 0) {
-			ret = send_data_frame(client->fd,
+			ret = send_data_frame(client,
 					      dynamic_detail->data_buffer,
 					      send_len,
 					      frame->stream_identifier,
@@ -413,7 +413,7 @@ again:
 			continue;
 		}
 
-		ret = send_data_frame(client->fd, NULL, 0,
+		ret = send_data_frame(client, NULL, 0,
 				      frame->stream_identifier,
 				      HTTP_SERVER_FLAG_END_STREAM);
 		if (ret < 0) {
@@ -493,7 +493,7 @@ static int dynamic_post_req_v2(struct http_resource_detail_dynamic *dynamic_deta
 				flags = HTTP_SERVER_FLAG_END_STREAM;
 			}
 
-			ret = send_data_frame(client->fd,
+			ret = send_data_frame(client,
 					      dynamic_detail->data_buffer,
 					      send_len,
 					      frame->stream_identifier,
@@ -772,7 +772,7 @@ int handle_http1_to_http2_upgrade(struct http_server_ctx *server,
 	}
 
 	if (!client->preface_sent) {
-		ret = http_server_sendall(client->fd, switching_protocols,
+		ret = http_server_sendall(client, switching_protocols,
 					  sizeof(switching_protocols) - 1);
 		if (ret < 0) {
 			goto error;

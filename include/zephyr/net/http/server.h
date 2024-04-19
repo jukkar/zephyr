@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 
+#include <zephyr/kernel.h>
 #include <zephyr/net/http/parser.h>
 #include <zephyr/net/http/hpack.h>
 #include <zephyr/net/socket.h>
@@ -151,6 +152,7 @@ struct http_client_ctx {
 	enum http1_parser_state parser_state;
 	int http1_frag_data_len;
 	bool headers_sent;
+	struct k_work_delayable inactivity_timer;
 };
 
 #define HTTP_SERVER_SOCK_COUNT (1 + HTTP_SERVER_MAX_SERVICES + HTTP_SERVER_MAX_CLIENTS)
