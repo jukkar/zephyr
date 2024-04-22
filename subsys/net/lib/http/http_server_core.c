@@ -23,7 +23,7 @@
 LOG_MODULE_REGISTER(net_http_server, CONFIG_NET_HTTP_SERVER_LOG_LEVEL);
 
 #include "../../ip/net_private.h"
-#include "headers/server_functions.h"
+#include "headers/server_internal.h"
 
 #define INVALID_SOCK -1
 
