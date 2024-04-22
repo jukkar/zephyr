@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "server_functions.h"
+#include "server_internal.h"
 
 #include <string.h>
 

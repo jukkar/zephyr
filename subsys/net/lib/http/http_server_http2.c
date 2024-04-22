@@ -18,7 +18,7 @@
 
 LOG_MODULE_DECLARE(net_http_server, CONFIG_NET_HTTP_SERVER_LOG_LEVEL);
 
-#include "headers/server_functions.h"
+#include "headers/server_internal.h"
 
 static const char content_404[] = {
 #ifdef INCLUDE_HTML_CONTENT

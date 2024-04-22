@@ -5,7 +5,7 @@
  */
 
 #include "http_service.h"
-#include "server_functions.h"
+#include "server_internal.h"
 #include <zephyr/logging/log.h>
 #include <zephyr/net/http/service.h>
 #include <zephyr/net/net_core.h>

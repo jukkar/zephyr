@@ -5,8 +5,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef HTTP_SERVER_FUNCTIONS_H_
-#define HTTP_SERVER_FUNCTIONS_H_
+#ifndef HTTP_SERVER_INTERNAL_H_
+#define HTTP_SERVER_INTERNAL_H_
 
 #include <stdbool.h>
 
@@ -47,4 +47,4 @@ int http_server_sendall(int sock, const void *buf, size_t len);
 int parse_http_frame_header(struct http_client_ctx *client);
 const char *get_frame_type_name(enum http_frame_type type);
 
-#endif
+#endif /* HTTP_SERVER_INTERNAL_H_ */
