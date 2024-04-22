@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "http_service.h"
 #include "server_internal.h"
 #include <zephyr/logging/log.h>
 #include <zephyr/net/http/service.h>
