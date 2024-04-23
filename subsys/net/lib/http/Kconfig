@@ -30,11 +30,6 @@ config HTTP_CLIENT
 	help
 	  HTTP client API
 
-config HTTP_HPACK_TABLE
-	bool "HTTP HPACK table support"
-	help
-	  This option enables HPACK table support.
-
 config HTTP_SERVER
 	bool "HTTP Server [EXPERIMENTAL]"
 	select HTTP_PARSER
