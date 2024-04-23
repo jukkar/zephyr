@@ -25,8 +25,19 @@ LOG_MODULE_REGISTER(net_http_server, CONFIG_NET_HTTP_SERVER_LOG_LEVEL);
 #include "../../ip/net_private.h"
 #include "headers/server_internal.h"
 
+#if defined(CONFIG_NET_TC_THREAD_COOPERATIVE)
+/* Lowest priority cooperative thread */
+#define THREAD_PRIORITY K_PRIO_COOP(CONFIG_NUM_COOP_PRIORITIES - 1)
+#else
+#define THREAD_PRIORITY K_PRIO_PREEMPT(CONFIG_NUM_PREEMPT_PRIORITIES - 1)
+#endif
+
 #define INVALID_SOCK -1
 #define INACTIVITY_TIMEOUT K_SECONDS(CONFIG_HTTP_SERVER_CLIENT_INACTIVITY_TIMEOUT)
+
+static struct http_server_ctx server_ctx;
+static K_SEM_DEFINE(server_start, 0, 1);
+static bool server_running;
 
 int http_server_init(struct http_server_ctx *ctx)
 {
@@ -236,7 +247,7 @@ static void close_client_connection(struct http_server_ctx *server,
 	int i;
 	struct k_work_sync sync;
 
-	__ASSERT_NO_MSG(IS_ARRAY_ELEMENT(server->clients, client));
+	__ASSERT_NO_MSG(IS_ARRAY_ELEMENT(server_ctx.clients, client));
 
 	k_work_cancel_delayable_sync(&client->inactivity_timer, &sync);
 	zsock_close(client->fd);
@@ -270,7 +281,7 @@ static void client_timeout(struct k_work *work)
 
 void http_client_timer_restart(struct http_client_ctx *client)
 {
-	__ASSERT_NO_MSG(IS_ARRAY_ELEMENT(server->clients, client));
+	__ASSERT_NO_MSG(IS_ARRAY_ELEMENT(server_ctx.clients, client));
 
 	k_work_reschedule(&client->inactivity_timer, INACTIVITY_TIMEOUT);
 }
@@ -394,7 +405,7 @@ static int handle_http_request(struct http_server_ctx *server, struct http_clien
 	return 0;
 }
 
-int http_server_start(struct http_server_ctx *ctx)
+static int http_server_run(struct http_server_ctx *ctx)
 {
 	struct http_client_ctx *client;
 	eventfd_t value;
@@ -549,23 +560,6 @@ closing:
 	return close_all_sockets(ctx);
 }
 
-/* Close all client connections and the server socket + any other things needed */
-int http_server_cleanup(struct http_server_ctx *ctx)
-{
-	if (ctx == NULL) {
-		return -EINVAL;
-	}
-
-	return close_all_sockets(ctx);
-}
-
-int http_server_stop(struct http_server_ctx *ctx)
-{
-	eventfd_write(ctx->fds[0].fd, 1);
-
-	return 0;
-}
-
 /* Compare two strings where the terminator is either "\0" or "?" */
 static int compare_strings(const char *s1, const char *s2)
 {
@@ -618,3 +612,63 @@ int http_server_sendall(struct http_client_ctx *client, const void *buf, size_t 
 
 	return 0;
 }
+
+int http_server_start(void)
+{
+	if (server_running) {
+		LOG_DBG("HTTP server already started");
+		return -EALREADY;
+	}
+
+	server_running = true;
+	k_sem_give(&server_start);
+
+	LOG_DBG("Starting HTTP server");
+
+	return 0;
+}
+
+int http_server_stop(void)
+{
+	if (!server_running) {
+		LOG_DBG("HTTP server already stopped");
+		return -EALREADY;
+	}
+
+	server_running = false;
+	k_sem_reset(&server_start);
+	eventfd_write(server_ctx.fds[0].fd, 1);
+
+	LOG_DBG("Stopping HTTP server");
+
+	return 0;
+}
+
+static void http_server_thread(void *p1, void *p2, void *p3)
+{
+	int ret;
+
+	ARG_UNUSED(p1);
+	ARG_UNUSED(p2);
+	ARG_UNUSED(p3);
+
+	while (true) {
+		k_sem_take(&server_start, K_FOREVER);
+
+		while (server_running) {
+			ret = http_server_init(&server_ctx);
+			if (ret < 0) {
+				LOG_ERR("Failed to initialize HTTP2 server");
+				return;
+			}
+
+			ret = http_server_run(&server_ctx);
+			if (server_running) {
+				LOG_INF("Re-starting server (%d)", ret);
+			}
+		}
+	}
+}
+
+K_THREAD_DEFINE(http_server_tid, CONFIG_HTTP_SERVER_STACK_SIZE,
+		http_server_thread, NULL, NULL, NULL, THREAD_PRIORITY, 0, 0);

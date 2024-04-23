@@ -16,8 +16,6 @@
 #include <zephyr/net/socket.h>
 
 #define HTTP_SERVER_CLIENT_BUFFER_SIZE CONFIG_HTTP_SERVER_CLIENT_BUFFER_SIZE
-#define HTTP_SERVER_MAX_SERVICES       CONFIG_HTTP_NUM_SERVICES
-#define HTTP_SERVER_MAX_CLIENTS        CONFIG_HTTP_SERVER_MAX_CLIENTS
 #define HTTP_SERVER_MAX_STREAMS        CONFIG_HTTP_SERVER_MAX_STREAMS
 #define HTTP_SERVER_MAX_CONTENT_TYPE_LEN CONFIG_HTTP_SERVER_MAX_CONTENT_TYPE_LENGTH
 
@@ -155,30 +153,10 @@ struct http_client_ctx {
 	struct k_work_delayable inactivity_timer;
 };
 
-#define HTTP_SERVER_SOCK_COUNT (1 + HTTP_SERVER_MAX_SERVICES + HTTP_SERVER_MAX_CLIENTS)
-
-struct http_server_ctx {
-	int num_clients;
-	int listen_fds;   /* max value of 1 + MAX_SERVICES */
-
-	/* First pollfd is eventfd that can be used to stop the server,
-	 * then we have the server listen sockets,
-	 * and then the accepted sockets.
-	 */
-	struct zsock_pollfd fds[HTTP_SERVER_SOCK_COUNT];
-	struct http_client_ctx clients[HTTP_SERVER_MAX_CLIENTS];
-};
-
-/* Initializes the HTTP2 server */
-int http_server_init(struct http_server_ctx *ctx);
-
 /* Starts the HTTP2 server */
-int http_server_start(struct http_server_ctx *ctx);
+int http_server_start(void);
 
 /* Stops the HTTP2 server */
-int http_server_stop(struct http_server_ctx *ctx);
-
-/* Cleanup the HTTP2 server */
-int http_server_cleanup(struct http_server_ctx *ctx);
+int http_server_stop(void);
 
 #endif

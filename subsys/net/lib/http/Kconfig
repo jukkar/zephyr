@@ -45,6 +45,12 @@ config HTTP_SERVER
 
 #if HTTP_SERVER
 
+config HTTP_SERVER_STACK_SIZE
+	int "HTTP server thread stack size"
+	default 3072
+	help
+	  HTTP server thread stack size for processing RX/TX events.
+
 config HTTP_NUM_SERVICES
 	int "Number of HTTP Server Instances"
 	default 1
