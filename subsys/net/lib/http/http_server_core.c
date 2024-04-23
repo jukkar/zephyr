@@ -90,7 +90,7 @@ int http_server_init(struct http_server_ctx *ctx)
 	}
 
 	ctx->fds[count].fd = fd;
-	ctx->fds[count].events = POLLIN;
+	ctx->fds[count].events = ZSOCK_POLLIN;
 	count++;
 
 	HTTP_SERVICE_FOREACH(svc) {
@@ -202,7 +202,7 @@ int http_server_init(struct http_server_ctx *ctx)
 		LOG_DBG("Initialized HTTP Service %s:%u", svc->host, *svc->port);
 
 		ctx->fds[count].fd = fd;
-		ctx->fds[count].events = POLLIN;
+		ctx->fds[count].events = ZSOCK_POLLIN;
 		count++;
 	}
 
@@ -453,7 +453,7 @@ static int http_server_run(struct http_server_ctx *ctx)
 				continue;
 			}
 
-			if (ctx->fds[i].revents & POLLHUP) {
+			if (ctx->fds[i].revents & ZSOCK_POLLHUP) {
 				if (i >= ctx->listen_fds) {
 					LOG_DBG("Client #%d has disconnected",
 						i - ctx->listen_fds);
@@ -465,7 +465,7 @@ static int http_server_run(struct http_server_ctx *ctx)
 				continue;
 			}
 
-			if (ctx->fds[i].revents & POLLERR) {
+			if (ctx->fds[i].revents & ZSOCK_POLLERR) {
 				(void)zsock_getsockopt(ctx->fds[i].fd, SOL_SOCKET,
 						       SO_ERROR, &sock_error, &optlen);
 				LOG_DBG("Error on fd %d %d", ctx->fds[i].fd, sock_error);
@@ -482,7 +482,7 @@ static int http_server_run(struct http_server_ctx *ctx)
 
 			}
 
-			if (!(ctx->fds[i].revents & POLLIN)) {
+			if (!(ctx->fds[i].revents & ZSOCK_POLLIN)) {
 				continue;
 			}
 
@@ -503,7 +503,7 @@ static int http_server_run(struct http_server_ctx *ctx)
 					}
 
 					ctx->fds[j].fd = new_socket;
-					ctx->fds[j].events = POLLIN;
+					ctx->fds[j].events = ZSOCK_POLLIN;
 					ctx->fds[j].revents = 0;
 
 					ctx->num_clients++;
