@@ -378,7 +378,7 @@ int enter_http1_request(struct http_client_ctx *client)
 	return 0;
 }
 
-int handle_http1_request(struct http_server_ctx *server, struct http_client_ctx *client)
+int handle_http1_request(struct http_client_ctx *client)
 {
 	int ret, path_len = 0;
 	struct http_resource_detail *detail;
@@ -429,7 +429,7 @@ int handle_http1_request(struct http_server_ctx *server, struct http_client_ctx 
 	}
 
 	if (client->has_upgrade_header) {
-		return handle_http1_to_http2_upgrade(server, client);
+		return handle_http1_to_http2_upgrade(client);
 	}
 
 	detail = get_resource_detail(client->url_buffer, &path_len);
@@ -469,9 +469,8 @@ int handle_http1_request(struct http_server_ctx *server, struct http_client_ctx 
 	client->data_len -= parsed;
 
 	if (client->parser_state == HTTP1_MESSAGE_COMPLETE_STATE) {
-		LOG_DBG("Connection closed client #%zd",
-			ARRAY_INDEX(server->clients, client));
-		enter_http_done_state(server, client);
+		LOG_DBG("Connection closed client %p", client);
+		enter_http_done_state(client);
 	}
 
 	return 0;
