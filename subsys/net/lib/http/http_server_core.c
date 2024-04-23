@@ -35,6 +35,22 @@ LOG_MODULE_REGISTER(net_http_server, CONFIG_NET_HTTP_SERVER_LOG_LEVEL);
 #define INVALID_SOCK -1
 #define INACTIVITY_TIMEOUT K_SECONDS(CONFIG_HTTP_SERVER_CLIENT_INACTIVITY_TIMEOUT)
 
+#define HTTP_SERVER_MAX_SERVICES CONFIG_HTTP_NUM_SERVICES
+#define HTTP_SERVER_MAX_CLIENTS  CONFIG_HTTP_SERVER_MAX_CLIENTS
+#define HTTP_SERVER_SOCK_COUNT (1 + HTTP_SERVER_MAX_SERVICES + HTTP_SERVER_MAX_CLIENTS)
+
+struct http_server_ctx {
+	int num_clients;
+	int listen_fds; /* max value of 1 + MAX_SERVICES */
+
+	/* First pollfd is eventfd that can be used to stop the server,
+	 * then we have the server listen sockets,
+	 * and then the accepted sockets.
+	 */
+	struct zsock_pollfd fds[HTTP_SERVER_SOCK_COUNT];
+	struct http_client_ctx clients[HTTP_SERVER_MAX_CLIENTS];
+};
+
 static struct http_server_ctx server_ctx;
 static K_SEM_DEFINE(server_start, 0, 1);
 static bool server_running;
@@ -241,8 +257,7 @@ static int close_all_sockets(struct http_server_ctx *ctx)
 	return 0;
 }
 
-static void close_client_connection(struct http_server_ctx *server,
-				    struct http_client_ctx *client)
+static void close_client_connection(struct http_client_ctx *client)
 {
 	int i;
 	struct k_work_sync sync;
@@ -252,11 +267,11 @@ static void close_client_connection(struct http_server_ctx *server,
 	k_work_cancel_delayable_sync(&client->inactivity_timer, &sync);
 	zsock_close(client->fd);
 
-	server->num_clients--;
+	server_ctx.num_clients--;
 
-	for (i = server->listen_fds; i < ARRAY_SIZE(server->fds); i++) {
-		if (server->fds[i].fd == client->fd) {
-			server->fds[i].fd = INVALID_SOCK;
+	for (i = server_ctx.listen_fds; i < ARRAY_SIZE(server_ctx.fds); i++) {
+		if (server_ctx.fds[i].fd == client->fd) {
+			server_ctx.fds[i].fd = INVALID_SOCK;
 			break;
 		}
 	}
@@ -306,8 +321,7 @@ static void init_client_ctx(struct http_client_ctx *client, int new_socket)
 	}
 }
 
-static int handle_http_preface(struct http_server_ctx *server,
-			       struct http_client_ctx *client)
+static int handle_http_preface(struct http_client_ctx *client)
 {
 	LOG_DBG("HTTP_SERVER_PREFACE_STATE.");
 
@@ -323,27 +337,25 @@ static int handle_http_preface(struct http_server_ctx *server,
 	return enter_http2_request(client);
 }
 
-static int handle_http_done(struct http_server_ctx *server,
-			    struct http_client_ctx *client)
+static int handle_http_done(struct http_client_ctx *client)
 {
 	LOG_DBG("HTTP_SERVER_DONE_STATE");
 
-	close_client_connection(server, client);
+	close_client_connection(client);
 
 	return -EAGAIN;
 }
 
-int enter_http_done_state(struct http_server_ctx *server,
-			  struct http_client_ctx *client)
+int enter_http_done_state(struct http_client_ctx *client)
 {
 	client->server_state = HTTP_SERVER_DONE_STATE;
 
-	close_client_connection(server, client);
+	close_client_connection(client);
 
 	return 0;
 }
 
-static int handle_http_request(struct http_server_ctx *server, struct http_client_ctx *client)
+static int handle_http_request(struct http_client_ctx *client)
 {
 	int ret = -EINVAL;
 
@@ -355,13 +367,13 @@ static int handle_http_request(struct http_server_ctx *server, struct http_clien
 			ret = handle_http_frame_data(client);
 			break;
 		case HTTP_SERVER_PREFACE_STATE:
-			ret = handle_http_preface(server, client);
+			ret = handle_http_preface(client);
 			break;
 		case HTTP_SERVER_REQUEST_STATE:
-			ret = handle_http1_request(server, client);
+			ret = handle_http1_request(client);
 			break;
 		case HTTP_SERVER_FRAME_HEADER_STATE:
-			ret = handle_http_frame_header(server, client);
+			ret = handle_http_frame_header(client);
 			break;
 		case HTTP_SERVER_FRAME_HEADERS_STATE:
 			ret = handle_http_frame_headers(client);
@@ -376,19 +388,19 @@ static int handle_http_request(struct http_server_ctx *server, struct http_clien
 			ret = handle_http_frame_window_update(client);
 			break;
 		case HTTP_SERVER_FRAME_RST_STREAM_STATE:
-			ret = handle_http_frame_rst_frame(server, client);
+			ret = handle_http_frame_rst_frame(client);
 			break;
 		case HTTP_SERVER_FRAME_GOAWAY_STATE:
-			ret = handle_http_frame_goaway(server, client);
+			ret = handle_http_frame_goaway(client);
 			break;
 		case HTTP_SERVER_FRAME_PRIORITY_STATE:
 			ret = handle_http_frame_priority(client);
 			break;
 		case HTTP_SERVER_DONE_STATE:
-			ret = handle_http_done(server, client);
+			ret = handle_http_done(client);
 			break;
 		default:
-			ret = handle_http_done(server, client);
+			ret = handle_http_done(client);
 			break;
 		}
 	} while (ret >= 0 && client->data_len > 0);
@@ -447,7 +459,7 @@ static int http_server_run(struct http_server_ctx *ctx)
 						i - ctx->listen_fds);
 
 					client = &ctx->clients[i - ctx->listen_fds];
-					close_client_connection(ctx, client);
+					close_client_connection(client);
 				}
 
 				continue;
@@ -460,7 +472,7 @@ static int http_server_run(struct http_server_ctx *ctx)
 
 				if (i >= ctx->listen_fds) {
 					client = &ctx->clients[i - ctx->listen_fds];
-					close_client_connection(ctx, client);
+					close_client_connection(client);
 					continue;
 				}
 
@@ -526,7 +538,7 @@ static int http_server_run(struct http_server_ctx *ctx)
 					LOG_DBG("ERROR reading from socket (%d)", ret);
 				}
 
-				close_client_connection(ctx, client);
+				close_client_connection(client);
 				continue;
 			}
 
@@ -534,21 +546,21 @@ static int http_server_run(struct http_server_ctx *ctx)
 
 			http_client_timer_restart(client);
 
-			ret = handle_http_request(ctx, client);
+			ret = handle_http_request(client);
 			if (ret < 0 && ret != -EAGAIN) {
 				if (ret == -ENOTCONN) {
 					LOG_DBG("Client closed connection while handling request");
 				} else {
 					LOG_ERR("HTTP request handling error (%d)", ret);
 				}
-				close_client_connection(ctx, client);
+				close_client_connection(client);
 			} else if (client->data_len == sizeof(client->buffer)) {
 				/* If the RX buffer is still full after parsing,
 				 * it means we won't be able to handle this request
 				 * with the current buffer size.
 				 */
 				LOG_ERR("RX buffer too small to handle request");
-				close_client_connection(ctx, client);
+				close_client_connection(client);
 			}
 		}
 	}

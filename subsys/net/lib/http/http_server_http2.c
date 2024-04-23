@@ -606,8 +606,7 @@ static int enter_http_frame_settings_state(struct http_client_ctx *client)
 	return 0;
 }
 
-static int enter_http_frame_data_state(struct http_server_ctx *server,
-				       struct http_client_ctx *client)
+static int enter_http_frame_data_state(struct http_client_ctx *client)
 {
 	struct http_frame *frame = &client->current_frame;
 	struct http_stream_ctx *stream;
@@ -638,8 +637,7 @@ static int enter_http_frame_data_state(struct http_server_ctx *server,
 	return 0;
 }
 
-static int enter_http_frame_headers_state(struct http_server_ctx *server,
-					  struct http_client_ctx *client)
+static int enter_http_frame_headers_state(struct http_client_ctx *client)
 {
 	struct http_frame *frame = &client->current_frame;
 	struct http_stream_ctx *stream;
@@ -682,24 +680,21 @@ static int enter_http_frame_priority_state(struct http_client_ctx *client)
 	return 0;
 }
 
-static int enter_http_frame_rst_stream_state(struct http_server_ctx *server,
-					     struct http_client_ctx *client)
+static int enter_http_frame_rst_stream_state(struct http_client_ctx *client)
 {
 	client->server_state = HTTP_SERVER_FRAME_RST_STREAM_STATE;
 
 	return 0;
 }
 
-static int enter_http_frame_goaway_state(struct http_server_ctx *server,
-					 struct http_client_ctx *client)
+static int enter_http_frame_goaway_state(struct http_client_ctx *client)
 {
 	client->server_state = HTTP_SERVER_FRAME_GOAWAY_STATE;
 
 	return 0;
 }
 
-int handle_http_frame_header(struct http_server_ctx *server,
-			     struct http_client_ctx *client)
+int handle_http_frame_header(struct http_client_ctx *client)
 {
 	int bytes_consumed;
 	int parse_result;
@@ -720,9 +715,9 @@ int handle_http_frame_header(struct http_server_ctx *server,
 
 	switch (client->current_frame.type) {
 	case HTTP_SERVER_DATA_FRAME:
-		return enter_http_frame_data_state(server, client);
+		return enter_http_frame_data_state(client);
 	case HTTP_SERVER_HEADERS_FRAME:
-		return enter_http_frame_headers_state(server, client);
+		return enter_http_frame_headers_state(client);
 	case HTTP_SERVER_CONTINUATION_FRAME:
 		return enter_http_frame_continuation_state(client);
 	case HTTP_SERVER_SETTINGS_FRAME:
@@ -730,13 +725,13 @@ int handle_http_frame_header(struct http_server_ctx *server,
 	case HTTP_SERVER_WINDOW_UPDATE_FRAME:
 		return enter_http_frame_window_update_state(client);
 	case HTTP_SERVER_RST_STREAM_FRAME:
-		return enter_http_frame_rst_stream_state(server, client);
+		return enter_http_frame_rst_stream_state(client);
 	case HTTP_SERVER_GOAWAY_FRAME:
-		return enter_http_frame_goaway_state(server, client);
+		return enter_http_frame_goaway_state(client);
 	case HTTP_SERVER_PRIORITY_FRAME:
 		return enter_http_frame_priority_state(client);
 	default:
-		return enter_http_done_state(server, client);
+		return enter_http_done_state(client);
 	}
 
 	return 0;
@@ -745,8 +740,7 @@ int handle_http_frame_header(struct http_server_ctx *server,
 /* This feature is theoretically obsoleted in RFC9113, but curl for instance
  * still uses it, so implement as described in RFC7540.
  */
-int handle_http1_to_http2_upgrade(struct http_server_ctx *server,
-				  struct http_client_ctx *client)
+int handle_http1_to_http2_upgrade(struct http_client_ctx *client)
 {
 	static const char switching_protocols[] =
 		"HTTP/1.1 101 Switching Protocols\r\n"
@@ -1062,7 +1056,7 @@ int handle_http_frame_priority(struct http_client_ctx *client)
 	return 0;
 }
 
-int handle_http_frame_rst_frame(struct http_server_ctx *server, struct http_client_ctx *client)
+int handle_http_frame_rst_frame(struct http_client_ctx *client)
 {
 	struct http_frame *frame = &client->current_frame;
 	int bytes_consumed;
@@ -1116,7 +1110,7 @@ int handle_http_frame_settings(struct http_client_ctx *client)
 	return 0;
 }
 
-int handle_http_frame_goaway(struct http_server_ctx *server, struct http_client_ctx *client)
+int handle_http_frame_goaway(struct http_client_ctx *client)
 {
 	struct http_frame *frame = &client->current_frame;
 	int bytes_consumed;
@@ -1133,7 +1127,7 @@ int handle_http_frame_goaway(struct http_server_ctx *server, struct http_client_
 	client->data_len -= bytes_consumed;
 	client->cursor += bytes_consumed;
 
-	enter_http_done_state(server, client);
+	enter_http_done_state(client);
 
 	return 0;
 }
