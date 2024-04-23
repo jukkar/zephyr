@@ -13,16 +13,9 @@
 #include <zephyr/ztest.h>
 
 #define BUFFER_SIZE  256
-#define STACK_SIZE   8192
 #define MY_IPV4_ADDR "127.0.0.1"
 #define SERVER_PORT  8080
 #define TIMEOUT      1000
-
-static struct k_sem server_sem;
-
-static K_THREAD_STACK_DEFINE(server_stack, STACK_SIZE);
-
-static struct k_thread server_thread;
 
 static const unsigned char index_html_gz[] = {
 #include "index.html.gz.inc"
@@ -67,17 +60,6 @@ struct http_resource_detail_static index_html_gz_resource_detail = {
 HTTP_RESOURCE_DEFINE(index_html_gz_resource, test_http_service, "/",
 		     &index_html_gz_resource_detail);
 
-static void server_thread_fn(void *arg0, void *arg1, void *arg2)
-{
-	struct http_server_ctx *ctx = (struct http_server_ctx *)arg0;
-
-	k_thread_name_set(k_current_get(), "server");
-
-	k_sem_give(&server_sem);
-
-	http_server_start(ctx);
-}
-
 static void test_crime(void)
 {
 	int ret, recv_len;
@@ -86,26 +68,10 @@ static void test_crime(void)
 	char *ptr;
 	const char *data;
 	size_t len;
-	k_tid_t server_thread_id;
 	struct sockaddr_in sa;
 	static unsigned char buf[512];
-	static struct http_server_ctx ctx;
 
-	k_sem_init(&server_sem, 0, 1);
-
-	ret = http_server_init(&ctx);
-	zassert_equal(ret, 0, "Failed to create server socket (%d)", ret);
-
-	server_thread_id = k_thread_create(&server_thread, server_stack,
-					   K_THREAD_STACK_SIZEOF(server_stack),
-					   server_thread_fn,
-					   &ctx, NULL, NULL,
-					   K_PRIO_PREEMPT(8), 0, K_NO_WAIT);
-
-	ret = k_sem_take(&server_sem, K_MSEC(TIMEOUT));
-	zassert_equal(0, ret, "failed to synchronize with server thread (%d)", ret);
-
-	k_thread_name_set(k_current_get(), "client");
+	zassert_ok(http_server_start(), "Failed to start the server");
 
 	ret = zsock_socket(AF_INET, SOCK_STREAM, proto);
 	zassert_not_equal(ret, -1, "failed to create client socket (%d)", errno);
@@ -162,13 +128,7 @@ static void test_crime(void)
 	ret = zsock_close(client_fd);
 	zassert_not_equal(-1, ret, "close() failed on the client fd (%d)", errno);
 
-	http_server_stop(&ctx);
-
-	ret = k_thread_join(&server_thread, K_FOREVER);
-	zassert_equal(0, ret, "k_thread_join() failed (%d)", ret);
-
-	ret = http_server_cleanup(&ctx);
-	zassert_equal(ret, 0, "Failed to cleanup server (%d)", ret);
+	zassert_ok(http_server_stop(), "Failed to stop the server");
 }
 
 ZTEST(framework_tests_crime, test_gen_gz_inc_file)
