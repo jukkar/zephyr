@@ -27,11 +27,6 @@ LOG_MODULE_REGISTER(net_test, CONFIG_NET_SOCKETS_LOG_LEVEL);
 #define BUFFER_SIZE 256
 #define SERVER_PORT 8000
 
-static struct k_sem server_sem;
-
-static K_THREAD_STACK_DEFINE(server_stack, STACK_SIZE);
-static struct k_thread server_thread;
-
 enum tls_tag {
 	/** The Certificate Authority public key */
 	CA_CERTIFICATE_TAG,
@@ -129,17 +124,6 @@ struct http_resource_detail_static index_html_gz_resource_detail = {
 HTTP_RESOURCE_DEFINE(index_html_gz_resource, test_http_service, "/",
 		     &index_html_gz_resource_detail);
 
-static void server_thread_fn(void *arg0, void *arg1, void *arg2)
-{
-	struct http_server_ctx *ctx = (struct http_server_ctx *)arg0;
-
-	k_thread_name_set(k_current_get(), "server");
-
-	k_sem_give(&server_sem);
-
-	http_server_start(ctx);
-}
-
 static void test_tls(void)
 {
 	int ret, recv_len;
@@ -148,10 +132,8 @@ static void test_tls(void)
 	size_t len;
 	char *ptr;
 	const char *data;
-	k_tid_t server_thread_id;
 	struct sockaddr_in sa;
 	static unsigned char buf[512];
-	static struct http_server_ctx ctx;
 	char http1_request[] =
 		"GET / HTTP/1.1\r\n"
 		"Host: 127.0.0.1:8080\r\n"
@@ -159,26 +141,12 @@ static void test_tls(void)
 		"Accept-Encoding: deflate, gzip, br\r\n"
 		"\r\n";
 
-	k_sem_init(&server_sem, 0, 1);
-
 	/* set the common protocol for both client and server */
 	if (IS_ENABLED(CONFIG_NET_SOCKETS_SOCKOPT_TLS)) {
 		proto = IPPROTO_TLS_1_2;
 	}
 
-	ret = http_server_init(&ctx);
-	zassert_equal(ret, 0, "Failed to create server socket (%d)");
-
-	server_thread_id = k_thread_create(&server_thread, server_stack,
-					   K_THREAD_STACK_SIZEOF(server_stack),
-					   server_thread_fn,
-					   &ctx, NULL, NULL,
-					   K_PRIO_PREEMPT(8), 0, K_NO_WAIT);
-
-	ret = k_sem_take(&server_sem, K_MSEC(TIMEOUT));
-	zassert_equal(ret, 0, "failed to synchronize with server thread (%d)", ret);
-
-	k_thread_name_set(k_current_get(), "client");
+	zassert_ok(http_server_start(), "Failed to start the server");
 
 	ret = zsock_socket(AF_INET, SOCK_STREAM, proto);
 	zassert_not_equal(ret, -1, "failed to create client socket (%d)", errno);
@@ -251,13 +219,7 @@ static void test_tls(void)
 	ret = zsock_close(client_fd);
 	zassert_not_equal(ret, -1, "close() failed on the client fd (%d)", errno);
 
-	http_server_stop(&ctx);
-
-	ret = k_thread_join(&server_thread, K_FOREVER);
-	zassert_equal(ret, 0, "k_thread_join() failed (%d)", ret);
-
-	ret = http_server_cleanup(&ctx);
-	zassert_equal(ret, 0, "Failed to cleanup server (%d)", ret);
+	zassert_ok(http_server_stop(), "Failed to stop the server");
 }
 
 ZTEST(framework_tests_tls, test_tls)

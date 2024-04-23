@@ -16,16 +16,10 @@
 #define SUPPORT_BACKWARD_COMPATIBILITY 1
 #define SUPPORT_HTTP_SERVER_UPGRADE    2
 #define BUFFER_SIZE                    256
-#define STACK_SIZE                     2048
 #define MY_IPV4_ADDR                   "127.0.0.1"
 #define SERVER_PORT                    8080
 #define TIMEOUT                        1000
 
-static struct k_sem server_sem;
-
-static K_THREAD_STACK_DEFINE(server_stack, STACK_SIZE);
-
-static struct k_thread server_thread;
 
 /* Magic, SETTINGS[0], HEADERS[1]: GET /, HEADERS[3]: GET /index.html, SETTINGS[0], GOAWAY[0]*/
 static const unsigned char frame[] = {
@@ -69,47 +63,20 @@ struct http_resource_detail_static index_html_gz_resource_detail = {
 HTTP_RESOURCE_DEFINE(index_html_gz_resource, test_http_service, "/",
 		     &index_html_gz_resource_detail);
 
-static void server_thread_fn(void *arg0, void *arg1, void *arg2)
-{
-	struct http_server_ctx *ctx = (struct http_server_ctx *)arg0;
-
-	k_thread_name_set(k_current_get(), "server");
-
-	k_sem_give(&server_sem);
-
-	http_server_start(ctx);
-}
-
 static void test_streams(void)
 {
 	int ret;
 	int client_fd;
 	int proto = IPPROTO_TCP;
 	char *ptr;
-	k_tid_t server_thread_id;
 	struct sockaddr_in sa;
 	static unsigned char buf[512];
-	static struct http_server_ctx ctx;
 	unsigned int length;
 	uint8_t type;
 	size_t offset;
 	uint32_t stream_id;
 
-	k_sem_init(&server_sem, 0, 1);
-
-	ret = http_server_init(&ctx);
-	zassert_equal(ret, 0, "Failed to create server socket (%d)", ret);
-
-	server_thread_id = k_thread_create(&server_thread, server_stack,
-					   K_THREAD_STACK_SIZEOF(server_stack),
-					   server_thread_fn,
-					   &ctx, NULL, NULL,
-					   K_PRIO_PREEMPT(8), 0, K_NO_WAIT);
-
-	ret = k_sem_take(&server_sem, K_MSEC(TIMEOUT));
-	zassert_equal(0, ret, "failed to synchronize with server thread (%d)", ret);
-
-	k_thread_name_set(k_current_get(), "client");
+	zassert_ok(http_server_start(), "Failed to start the server");
 
 	ret = zsock_socket(AF_INET, SOCK_STREAM, proto);
 	zassert_not_equal(ret, -1, "failed to create client socket (%d)", errno);
@@ -221,13 +188,7 @@ static void test_streams(void)
 	ret = zsock_close(client_fd);
 	zassert_not_equal(-1, ret, "close() failed on the client fd (%d)", errno);
 
-	http_server_stop(&ctx);
-
-	ret = k_thread_join(&server_thread, K_FOREVER);
-	zassert_equal(0, ret, "k_thread_join() failed (%d)", ret);
-
-	ret = http_server_cleanup(&ctx);
-	zassert_equal(ret, 0, "Failed to cleanup server (%d)", ret);
+	zassert_ok(http_server_stop(), "Failed to stop the server");
 }
 
 ZTEST(server_function_tests, test_http_concurrent_streams)
@@ -241,26 +202,10 @@ static void test_common(int test_support)
 	int client_fd;
 	int proto = IPPROTO_TCP;
 	char *ptr;
-	k_tid_t server_thread_id;
 	struct sockaddr_in sa = { 0 };
-	static struct http_server_ctx ctx;
 	static unsigned char buf[512];
 
-	k_sem_init(&server_sem, 0, 1);
-
-	ret = http_server_init(&ctx);
-	zassert_equal(ret, 0, "Failed to create server socket (%d)", ret);
-
-	server_thread_id = k_thread_create(&server_thread, server_stack,
-					   K_THREAD_STACK_SIZEOF(server_stack),
-					   server_thread_fn,
-					   &ctx, NULL, NULL,
-					   K_PRIO_PREEMPT(8), 0, K_NO_WAIT);
-
-	ret = k_sem_take(&server_sem, K_MSEC(TIMEOUT));
-	zassert_equal(0, ret, "failed to synchronize with server thread (%d)", ret);
-
-	k_thread_name_set(k_current_get(), "client");
+	zassert_ok(http_server_start(), "Failed to start the server");
 
 	ret = zsock_socket(AF_INET, SOCK_STREAM, proto);
 	zassert_not_equal(ret, -1, "failed to create client socket (%d)", errno);
@@ -323,13 +268,7 @@ static void test_common(int test_support)
 	ret = zsock_close(client_fd);
 	zassert_not_equal(-1, ret, "close() failed on the client fd (%d)", errno);
 
-	http_server_stop(&ctx);
-
-	ret = k_thread_join(&server_thread, K_FOREVER);
-	zassert_equal(0, ret, "k_thread_join() failed (%d)", ret);
-
-	ret = http_server_cleanup(&ctx);
-	zassert_equal(ret, 0, "Failed to cleanup server (%d)", ret);
+	zassert_ok(http_server_stop(), "Failed to stop the server");
 }
 
 ZTEST(server_function_tests, test_http_upgrade)
@@ -342,82 +281,40 @@ ZTEST(server_function_tests, test_backward_compatibility)
 	test_common(SUPPORT_BACKWARD_COMPATIBILITY);
 }
 
-ZTEST(server_function_tests, test_http_support_ipv6)
+ZTEST(server_function_tests, test_http_server_start_stop)
 {
-	static struct http_server_ctx ctx;
+	struct sockaddr_in sa = { 0 };
+	int client_fd;
 	int ret;
 
-	ret = http_server_init(&ctx);
+	sa.sin_family = AF_INET;
+	sa.sin_port = htons(SERVER_PORT);
 
-	/* Check that the function returned a valid file descriptor */
-	zassert_equal(ret, 0, "Failed to initialize HTTP/2 server with IPv6 (%d)", ret);
+	ret = zsock_inet_pton(AF_INET, MY_IPV4_ADDR, &sa.sin_addr.s_addr);
+	zassert_not_equal(-1, ret, "inet_pton() failed (%d)", errno);
+	zassert_not_equal(0, ret, "%s is not a valid IPv4 address", MY_IPV4_ADDR);
+	zassert_equal(1, ret, "inet_pton() failed to convert %s", MY_IPV4_ADDR);
 
-	ret = http_server_cleanup(&ctx);
-	zassert_equal(ret, 0, "Failed to cleanup server (%d)", ret);
-}
+	zassert_ok(http_server_start(), "Failed to start the server");
+	zassert_not_ok(http_server_start(), "Server start should report na error.");
 
-ZTEST(server_function_tests, test_http_support_ipv4)
-{
-	static struct http_server_ctx ctx;
-	int ret;
+	zassert_ok(http_server_stop(), "Failed to stop the server");
+	zassert_not_ok(http_server_stop(), "Server stop should report na error.");
 
-	ret = http_server_init(&ctx);
+	zassert_ok(http_server_start(), "Failed to start the server");
 
-	zassert_equal(ret, 0, "Failed to initialize HTTP/2 server with IPv4 (%d)", ret);
+	/* Server should be listening now. */
+	ret = zsock_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	zassert_not_equal(ret, -1, "failed to create client socket (%d)", errno);
+	client_fd = ret;
 
-	ret = http_server_cleanup(&ctx);
-	zassert_equal(ret, 0, "Failed to cleanup server (%d)", ret);
-}
+	ret = zsock_connect(client_fd, (struct sockaddr *)&sa, sizeof(sa));
+	zassert_not_equal(ret, -1, "failed to connect to the server (%d)", errno);
 
-static void server_thread_stop_fn(void *arg0, void *arg1, void *arg2)
-{
-	struct http_server_ctx *ctx = (struct http_server_ctx *)arg0;
-	int program_status;
+	ret = zsock_close(client_fd);
+	zassert_not_equal(-1, ret, "close() failed on the client fd (%d)", errno);
 
-	k_sem_give(&server_sem);
-
-	program_status = http_server_start(ctx);
-
-	zassert_equal(program_status, 0, "The server didn't shut down successfully");
-}
-
-ZTEST(server_function_tests, test_http_server_stop)
-{
-	static struct http_server_ctx ctx;
-	int ret;
-
-	k_sem_init(&server_sem, 0, 1);
-
-	ret = http_server_init(&ctx);
-	zassert_equal(ret, 0, "Failed to create server socket (%d)", ret);
-
-	k_thread_create(&server_thread, server_stack,
-			K_THREAD_STACK_SIZEOF(server_stack),
-			server_thread_stop_fn,
-			&ctx, NULL, NULL,
-			K_PRIO_PREEMPT(8), 0, K_NO_WAIT);
-	k_sem_take(&server_sem, K_MSEC(TIMEOUT));
-
-	http_server_stop(&ctx);
-
-	ret = k_thread_join(&server_thread, K_FOREVER);
-	zassert_equal(0, ret, "k_thread_join() failed (%d)", ret);
-
-	ret = http_server_cleanup(&ctx);
-	zassert_equal(ret, 0, "Failed to cleanup server (%d)", ret);
-}
-
-ZTEST(server_function_tests, test_http_server_init)
-{
-	static struct http_server_ctx ctx;
-	int ret;
-
-	ret = http_server_init(&ctx);
-
-	zassert_equal(ret, 0, "Failed to initiate server (%d)", ret);
-
-	ret = http_server_cleanup(&ctx);
-	zassert_equal(ret, 0, "Failed to cleanup server (%d)", ret);
+	zassert_ok(http_server_stop(), "Failed to stop the server");
 }
 
 ZTEST(server_function_tests, test_get_frame_type_name)
