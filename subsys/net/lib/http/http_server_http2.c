@@ -341,17 +341,10 @@ static int handle_http2_static_resource(
 	}
 
 	ret = send_data_frame(client, content_200, content_len,
-			      frame->stream_identifier, 0);
-	if (ret < 0) {
-		LOG_DBG("Cannot write to socket (%d)", ret);
-		goto out;
-	}
-
-	ret = send_data_frame(client, NULL, 0,
 			      frame->stream_identifier,
 			      HTTP_SERVER_FLAG_END_STREAM);
 	if (ret < 0) {
-		LOG_DBG("Cannot send last frame (%d)", ret);
+		LOG_DBG("Cannot write to socket (%d)", ret);
 		goto out;
 	}
 
