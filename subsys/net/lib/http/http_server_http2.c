@@ -318,6 +318,21 @@ static int send_http2_404(struct http_client_ctx *client,
 	return ret;
 }
 
+static int send_http2_409(struct http_client_ctx *client,
+			  struct http_frame *frame)
+{
+	int ret;
+
+	ret = send_headers_frame(client, HTTP_409_CONFLICT,
+				 frame->stream_identifier, NULL,
+				 HTTP_SERVER_FLAG_END_STREAM);
+	if (ret < 0) {
+		LOG_DBG("Cannot write to socket (%d)", ret);
+	}
+
+	return ret;
+}
+
 static int handle_http2_static_resource(
 	struct http_resource_detail_static *static_detail,
 	struct http_frame *frame, struct http_client_ctx *client)
@@ -413,6 +428,8 @@ again:
 			LOG_DBG("Cannot send last frame (%d)", ret);
 		}
 
+		dynamic_detail->holder = NULL;
+
 		break;
 	}
 
@@ -500,21 +517,24 @@ static int dynamic_post_req_v2(struct http_resource_detail_dynamic *dynamic_deta
 
 
 
-	if (frame->length == 0 && end_stream_flag(frame->flags) &&
-	    !client->headers_sent) {
-		/* The callback did not report any data to send, therefore send
-		 * headers frame now, including END_STREAM flag.
-		 */
-		ret = send_headers_frame(
-			client, HTTP_200_OK, frame->stream_identifier,
-			dynamic_detail->common.content_encoding,
-			HTTP_SERVER_FLAG_END_STREAM);
-		if (ret < 0) {
-			LOG_DBG("Cannot write to socket (%d)", ret);
-			return ret;
+	if (frame->length == 0 && end_stream_flag(frame->flags)) {
+		if (!client->headers_sent) {
+			/* The callback did not report any data to send, therefore send
+			* headers frame now, including END_STREAM flag.
+			*/
+			ret = send_headers_frame(
+				client, HTTP_200_OK, frame->stream_identifier,
+				dynamic_detail->common.content_encoding,
+				HTTP_SERVER_FLAG_END_STREAM);
+			if (ret < 0) {
+				LOG_DBG("Cannot write to socket (%d)", ret);
+				return ret;
+			}
+
+			client->headers_sent = true;
 		}
 
-		client->headers_sent = true;
+		dynamic_detail->holder = NULL;
 	}
 
 
@@ -526,6 +546,7 @@ static int handle_http2_dynamic_resource(
 	struct http_frame *frame, struct http_client_ctx *client)
 {
 	uint32_t user_method;
+	int ret;
 
 	if (dynamic_detail->cb == NULL) {
 		return -ESRCH;
@@ -536,6 +557,17 @@ static int handle_http2_dynamic_resource(
 	if (!(BIT(client->method) & user_method)) {
 		return -ENOPROTOOPT;
 	}
+
+	if (dynamic_detail->holder != NULL && dynamic_detail->holder != client) {
+		ret = send_http2_409(client, frame);
+		if (ret < 0) {
+			return ret;
+		}
+
+		return enter_http_done_state(client);
+	}
+
+	dynamic_detail->holder = client;
 
 	switch (client->method) {
 	case HTTP_GET:

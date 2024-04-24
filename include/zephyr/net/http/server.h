@@ -70,6 +70,7 @@ struct http_resource_detail_dynamic {
 	http_resource_dynamic_cb_t cb;
 	uint8_t *data_buffer;
 	size_t data_buffer_len;
+	struct http_client_ctx *holder;
 	void *user_data;
 };
 

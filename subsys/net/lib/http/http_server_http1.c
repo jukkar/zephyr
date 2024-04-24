@@ -142,6 +142,8 @@ again:
 		break;
 	}
 
+	dynamic_detail->holder = NULL;
+
 	ret = http_server_sendall(client, final_chunk,
 				  sizeof(final_chunk) - 1);
 	if (ret < 0) {
@@ -172,7 +174,6 @@ static int dynamic_post_req(struct http_resource_detail_dynamic *dynamic_detail,
 		}
 		client->headers_sent = true;
 	}
-
 
 	while (1) {
 		int copy_len, send_len;
@@ -229,6 +230,8 @@ again:
 		if (ret < 0) {
 			return ret;
 		}
+
+		dynamic_detail->holder = NULL;
 	}
 
 	return 0;
@@ -251,6 +254,22 @@ static int handle_http1_dynamic_resource(
 		return -ENOPROTOOPT;
 	}
 
+	if (dynamic_detail->holder != NULL && dynamic_detail->holder != client) {
+		static const char conflict_response[] =
+				"HTTP/1.1 409 Conflict\r\n\r\n";
+
+		ret = http_server_sendall(client, conflict_response,
+					  sizeof(conflict_response) - 1);
+		if (ret < 0) {
+			LOG_DBG("Cannot write to socket (%d)", ret);
+			return ret;
+		}
+
+		return enter_http_done_state(client);
+	}
+
+	dynamic_detail->holder = client;
+
 	switch (client->method) {
 	case HTTP_HEAD:
 		if (user_method & BIT(HTTP_HEAD)) {
@@ -260,6 +279,8 @@ static int handle_http1_dynamic_resource(
 			if (ret < 0) {
 				return ret;
 			}
+
+			dynamic_detail->holder = NULL;
 
 			return 0;
 		}
