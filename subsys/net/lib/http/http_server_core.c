@@ -257,6 +257,33 @@ static int close_all_sockets(struct http_server_ctx *ctx)
 	return 0;
 }
 
+static void client_release_resources(struct http_client_ctx *client)
+{
+	struct http_resource_detail *detail;
+	struct http_resource_detail_dynamic *dynamic_detail;
+
+	HTTP_SERVICE_FOREACH(service) {
+		HTTP_SERVICE_FOREACH_RESOURCE(service, resource) {
+			detail = resource->detail;
+
+			if (detail->type == HTTP_RESOURCE_TYPE_DYNAMIC) {
+				dynamic_detail =
+					(struct http_resource_detail_dynamic *)detail;
+
+				if (dynamic_detail->holder == client) {
+					/* If the client still holds the resource
+					 * at this point, it means the transaction
+					 * was not complete. Release the resource and
+					 * notify application.
+					 */
+					/* TODO Notify app. */
+					dynamic_detail->holder = NULL;
+				}
+			}
+		}
+	}
+}
+
 static void close_client_connection(struct http_client_ctx *client)
 {
 	int i;
@@ -266,6 +293,7 @@ static void close_client_connection(struct http_client_ctx *client)
 
 	k_work_cancel_delayable_sync(&client->inactivity_timer, &sync);
 	zsock_close(client->fd);
+	client_release_resources(client);
 
 	server_ctx.num_clients--;
 
@@ -278,6 +306,7 @@ static void close_client_connection(struct http_client_ctx *client)
 
 	memset(client, 0, sizeof(struct http_client_ctx));
 	client->fd = INVALID_SOCK;
+
 }
 
 static void client_timeout(struct k_work *work)
@@ -348,11 +377,11 @@ static int handle_http_done(struct http_client_ctx *client)
 
 int enter_http_done_state(struct http_client_ctx *client)
 {
-	client->server_state = HTTP_SERVER_DONE_STATE;
-
 	close_client_connection(client);
 
-	return 0;
+	client->server_state = HTTP_SERVER_DONE_STATE;
+
+	return -EAGAIN;
 }
 
 static int handle_http_request(struct http_client_ctx *client)
