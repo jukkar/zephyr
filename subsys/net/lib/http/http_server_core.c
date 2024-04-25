@@ -276,8 +276,16 @@ static void client_release_resources(struct http_client_ctx *client)
 					 * was not complete. Release the resource and
 					 * notify application.
 					 */
-					/* TODO Notify app. */
 					dynamic_detail->holder = NULL;
+
+					if(dynamic_detail->cb != NULL) {
+						dynamic_detail->cb(
+							client,
+							HTTP_SERVER_DATA_ABORTED,
+							NULL, 0,
+							dynamic_detail->user_data
+						);
+					}
 				}
 			}
 		}
