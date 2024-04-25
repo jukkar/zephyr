@@ -40,7 +40,7 @@ HTTP_RESOURCE_DEFINE(index_html_gz_resource, test_http_service, "/",
 
 static uint8_t recv_buffer[1024];
 
-static int dyn_handler(struct http_client_ctx *client,
+static int dyn_handler(struct http_client_ctx *client, enum http_data_status status,
 		       uint8_t *buffer, size_t len, void *user_data)
 {
 #define MAX_TEMP_PRINT_LEN 32
@@ -50,8 +50,8 @@ static int dyn_handler(struct http_client_ctx *client,
 
 	__ASSERT_NO_MSG(buffer != NULL);
 
-	if (len == 0) {
-		LOG_DBG("All data received (%zd bytes).", processed);
+	if (status == HTTP_SERVER_DATA_ABORTED) {
+		LOG_DBG("Transaction aborted after %zd bytes.", processed);
 		processed = 0;
 		return 0;
 	}
@@ -61,6 +61,11 @@ static int dyn_handler(struct http_client_ctx *client,
 	snprintf(print_str, sizeof(print_str), "%s received (%zd bytes)",
 		 http_method_str(method), len);
 	LOG_HEXDUMP_DBG(buffer, len, print_str);
+
+	if (status == HTTP_SERVER_DATA_FINAL) {
+		LOG_DBG("All data received (%zd bytes).", processed);
+		processed = 0;
+	}
 
 	/* This will echo data back to client as the buffer and recv_buffer
 	 * point to same area.
