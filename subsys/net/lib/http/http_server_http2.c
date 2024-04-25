@@ -386,14 +386,22 @@ static int dynamic_get_req_v2(struct http_resource_detail_dynamic *dynamic_detai
 	/* Pass URL to the client */
 	while (1) {
 		int copy_len, send_len;
+		enum http_data_status status;
 
 		ptr = &client->url_buffer[offset];
 		copy_len = MIN(remaining, dynamic_detail->data_buffer_len);
 
-		memcpy(dynamic_detail->data_buffer, ptr, copy_len);
+		if (copy_len > 0) {
+			memcpy(dynamic_detail->data_buffer, ptr, copy_len);
+		}
 
-again:
-		send_len = dynamic_detail->cb(client,
+		if (copy_len == remaining) {
+			status = HTTP_SERVER_DATA_FINAL;
+		} else {
+			status = HTTP_SERVER_DATA_MORE;
+		}
+
+		send_len = dynamic_detail->cb(client, status,
 					      dynamic_detail->data_buffer,
 					      copy_len,
 					      dynamic_detail->user_data);
@@ -409,14 +417,6 @@ again:
 
 			offset += copy_len;
 			remaining -= copy_len;
-
-			/* If we have passed all the data to the application,
-			 * then just pass empty buffer to it.
-			 */
-			if (remaining == 0) {
-				copy_len = 0;
-				goto again;
-			}
 
 			continue;
 		}
@@ -449,35 +449,29 @@ static int dynamic_post_req_v2(struct http_resource_detail_dynamic *dynamic_deta
 	}
 
 	data_len = MIN(frame->length, client->data_len);
+	copy_len = MIN(data_len, dynamic_detail->data_buffer_len);
 
-	do {
+	while (copy_len > 0) {
+		enum http_data_status status;
 		int send_len;
 
 		/* Read all the user data and pass it to application. After
 		 * passing all the data, if application returns 0, it means
 		 * that there is no more data to send to client.
 		 */
+		memcpy(dynamic_detail->data_buffer, client->cursor, copy_len);
+		data_len -= copy_len;
+		client->cursor += copy_len;
+		client->data_len -= copy_len;
+		frame->length -= copy_len;
 
-		copy_len = MIN(data_len, dynamic_detail->data_buffer_len);
-
-		if (copy_len > 0) {
-			memcpy(dynamic_detail->data_buffer, client->cursor, copy_len);
-			data_len -= copy_len;
-			client->cursor += copy_len;
-			client->data_len -= copy_len;
-			frame->length -= copy_len;
+		if (frame->length == 0 && end_stream_flag(frame->flags)) {
+			status = HTTP_SERVER_DATA_FINAL;
 		} else {
-			data_len = 0;
-			if (frame->length > 0 || !end_stream_flag(frame->flags)) {
-				/* Still have some data left in current stream,
-				* but not in this fragment.
-				*/
-				ret = 0;
-				break;
-			}
+			status = HTTP_SERVER_DATA_MORE;
 		}
 
-		send_len = dynamic_detail->cb(client,
+		send_len = dynamic_detail->cb(client, status,
 					      dynamic_detail->data_buffer,
 					      copy_len,
 					      dynamic_detail->user_data);
@@ -513,9 +507,9 @@ static int dynamic_post_req_v2(struct http_resource_detail_dynamic *dynamic_deta
 				return ret;
 			}
 		}
-	} while (copy_len > 0);
 
-
+		copy_len = MIN(data_len, dynamic_detail->data_buffer_len);
+	};
 
 	if (frame->length == 0 && end_stream_flag(frame->flags)) {
 		if (!client->headers_sent) {

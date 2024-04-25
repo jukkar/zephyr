@@ -100,14 +100,21 @@ static int dynamic_get_req(struct http_resource_detail_dynamic *dynamic_detail,
 	/* Pass URL to the client */
 	while (1) {
 		int copy_len, send_len;
+		enum http_data_status status;
 
 		ptr = &client->url_buffer[offset];
 		copy_len = MIN(remaining, dynamic_detail->data_buffer_len);
 
 		memcpy(dynamic_detail->data_buffer, ptr, copy_len);
 
-again:
-		send_len = dynamic_detail->cb(client, dynamic_detail->data_buffer,
+		if (copy_len == remaining) {
+			status = HTTP_SERVER_DATA_FINAL;
+		} else {
+			status = HTTP_SERVER_DATA_MORE;
+		}
+
+		send_len = dynamic_detail->cb(client, status,
+					      dynamic_detail->data_buffer,
 					      copy_len, dynamic_detail->user_data);
 		if (send_len > 0) {
 			ret = snprintk(tmp, sizeof(tmp), "%x\r\n", send_len);
@@ -127,14 +134,6 @@ again:
 
 			offset += copy_len;
 			remaining -= copy_len;
-
-			/* If we have passed all the data to the application,
-			 * then just pass empty buffer to it.
-			 */
-			if (remaining == 0) {
-				copy_len = 0;
-				goto again;
-			}
 
 			continue;
 		}
@@ -159,6 +158,7 @@ static int dynamic_post_req(struct http_resource_detail_dynamic *dynamic_detail,
 	/* offset tells from where the POST params start */
 	char *start = client->cursor;
 	int ret, remaining = client->data_len, offset = 0;
+	int copy_len;
 	char *ptr;
 	char tmp[TEMP_BUF_LEN];
 
@@ -175,21 +175,24 @@ static int dynamic_post_req(struct http_resource_detail_dynamic *dynamic_detail,
 		client->headers_sent = true;
 	}
 
-	while (1) {
-		int copy_len, send_len;
+	copy_len = MIN(remaining, dynamic_detail->data_buffer_len);
+	while (copy_len > 0) {
+		enum http_data_status status;
+		int send_len;
 
 		ptr = &start[offset];
-		copy_len = MIN(remaining, dynamic_detail->data_buffer_len);
 
 		memcpy(dynamic_detail->data_buffer, ptr, copy_len);
 
-again:
-		if (remaining == 0 &&
-		    client->parser_state != HTTP1_MESSAGE_COMPLETE_STATE) {
-			break;
+		if (copy_len == remaining &&
+		    client->parser_state == HTTP1_MESSAGE_COMPLETE_STATE) {
+			status = HTTP_SERVER_DATA_FINAL;
+		} else {
+			status = HTTP_SERVER_DATA_MORE;
 		}
 
-		send_len = dynamic_detail->cb(client, dynamic_detail->data_buffer,
+		send_len = dynamic_detail->cb(client, status,
+					      dynamic_detail->data_buffer,
 					      copy_len, dynamic_detail->user_data);
 		if (send_len > 0) {
 			ret = snprintk(tmp, sizeof(tmp), "%x\r\n", send_len);
@@ -209,19 +212,9 @@ again:
 
 			offset += copy_len;
 			remaining -= copy_len;
-
-			/* If we have passed all the data to the application,
-			 * then just pass empty buffer to it.
-			 */
-			if (remaining == 0) {
-				copy_len = 0;
-				goto again;
-			}
-
-			continue;
 		}
 
-		break;
+		copy_len = MIN(remaining, dynamic_detail->data_buffer_len);
 	}
 
 	if (client->parser_state == HTTP1_MESSAGE_COMPLETE_STATE) {

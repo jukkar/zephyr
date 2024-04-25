@@ -45,12 +45,23 @@ struct http_resource_detail_static {
 
 struct http_client_ctx;
 
+/** Indicates the status of the currently processed piece of data.  */
+enum http_data_status {
+	/** Transaction aborted, data incomplete. */
+	HTTP_SERVER_DATA_ABORTED = -1,
+	/** Transaction incomplete, more data expected. */
+	HTTP_SERVER_DATA_MORE = 0,
+	/** Final data fragment in current transaction. */
+	HTTP_SERVER_DATA_FINAL = 1,
+};
+
 /**
  * @typedef http_resource_dynamic_cb_t
  * @brief Callback used when data is received. Data to be sent to client
  *        can be specified.
  *
  * @param client HTTP context information for this client connection.
+ * @param status HTTP data status, indicate whether more data is expected or not.
  * @param data_buffer Data received.
  * @param data_len Amount of data received.
  * @param user_data User specified data.
@@ -61,6 +72,7 @@ struct http_client_ctx;
  *         <0 error, close the connection.
  */
 typedef int (*http_resource_dynamic_cb_t)(struct http_client_ctx *client,
+					  enum http_data_status status,
 					  uint8_t *data_buffer,
 					  size_t data_len,
 					  void *user_data);
