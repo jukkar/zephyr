@@ -46,7 +46,7 @@ config HTTP_SERVER_STACK_SIZE
 	help
 	  HTTP server thread stack size for processing RX/TX events.
 
-config HTTP_NUM_SERVICES
+config HTTP_SERVER_NUM_SERVICES
 	int "Number of HTTP Server Instances"
 	default 1
 	range 1 100
@@ -83,13 +83,6 @@ config HTTP_SERVER_HUFFMAN_DECODE_BUFFER_SIZE
 	  processing HPACK compressed headers. This effectively limits the
 	  maximum length of an individual HTTP header supported.
 
-config HTTP_SERVER_MAX_RESPONSE_SIZE
-	int "Maximum HTTP Response Size"
-	default 128
-	range 64 1024
-	help
-	  This setting determines the maximum size of the HTTP response that the server can handle.
-
 config HTTP_SERVER_MAX_URL_LENGTH
 	int "Maximum HTTP URL Length"
 	default 64
@@ -103,20 +96,6 @@ config HTTP_SERVER_MAX_CONTENT_TYPE_LENGTH
 	range 1 128
 	help
 	  This setting determines the maximum length of the HTTP Content-Length field.
-
-config HTTP_SERVER_MAX_FRAME_SIZE
-	int "Maximum Frame Size"
-	default 2048
-	range 1024 4096
-	help
-	  This setting determines the maximum size of a frame that the server can handle.
-
-config HTTP_SERVER_POST_REQUEST_STORAGE_LIMIT
-	int "Post Request Storage Limit"
-	default 10
-	range 1 100
-	help
-	  This setting determines the maximum size of a frame that the server can handle.
 
 config HTTP_SERVER_CLIENT_INACTIVITY_TIMEOUT
 	int "Client inactivity timeout (seconds)"
