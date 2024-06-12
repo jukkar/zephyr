@@ -1,0 +1,7 @@
+# This makefile builds sample for POSIX system, like Linux
+
+socket_poll_echo: src/main.c
+	$(CC) $^ -o $@ -lpthread
+
+clean:
+	rm -f socket_poll_echo
