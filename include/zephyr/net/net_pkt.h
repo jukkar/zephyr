@@ -101,6 +101,10 @@ struct net_pkt {
 	struct net_if *orig_iface; /* Original network interface */
 #endif
 
+#if defined(CONFIG_WIREGUARD)
+	struct net_if *wg_iface; /* Original network interface */
+#endif
+
 #if defined(CONFIG_NET_PKT_TIMESTAMP) || defined(CONFIG_NET_PKT_TXTIME)
 	/**
 	 * TX or RX timestamp if available
@@ -377,6 +381,19 @@ static inline void net_pkt_set_orig_iface(struct net_pkt *pkt,
 	ARG_UNUSED(iface);
 #endif
 }
+
+#if defined(CONFIG_WIREGUARD)
+static inline struct net_if *net_pkt_wg_iface(struct net_pkt *pkt)
+{
+	return pkt->wg_iface;
+}
+
+static inline void net_pkt_set_wg_iface(struct net_pkt *pkt,
+					struct net_if *iface)
+{
+	pkt->wg_iface = iface;
+}
+#endif
 
 static inline uint8_t net_pkt_family(struct net_pkt *pkt)
 {

@@ -33,3 +33,4 @@ if(CONFIG_HTTP)
 endif()
 
 add_subdirectory_ifdef(CONFIG_WEBSOCKET_CLIENT websocket)
+add_subdirectory_ifdef(CONFIG_WIREGUARD        wireguard)

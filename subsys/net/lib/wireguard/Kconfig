@@ -1,0 +1,59 @@
+# Wireguard VPN service for Zephyr
+
+# Copyright (c) 2024 Nordic Semiconductor
+# SPDX-License-Identifier: Apache-2.0
+
+config WIREGUARD
+	bool "Wireguard VPN service"
+	depends on NET_UDP
+	select NET_IPV4_MAPPING_TO_IPV6 if NET_IPV4 && NET_IPV6
+	select NET_MGMT
+	select NET_MGMT_EVENT
+	select NET_L2_DUMMY
+	select NET_L2_VIRTUAL
+	select BASE64
+	help
+	  Select 'y' if you want to enable Wireguard VPN service.
+
+if WIREGUARD
+
+config WIREGUARD_MAX_PEER
+	int "Maximum number of peer connections"
+	default 1
+	range 1 256
+	help
+	  How many Wireguard VPN connections are possible.
+
+config WIREGUARD_INTERFACE
+	string "Network interface to use"
+	help
+	  Leave empty if you want to use all network interfaces
+	  for the VPN connections.
+
+config WIREGUARD_SERVER
+	bool "Listen incoming connections"
+	help
+	  By default the server role is not enabled.
+
+config WIREGUARD_SERVER_PORT
+	int "UDP port to use when acting as a server"
+	default 51820
+	depends on WIREGUARD_SERVER
+	help
+	  Default Wireguard UDP port.
+
+module = WIREGUARD
+module-dep = NET_LOG
+module-str = Log level for Wireguard VPN service
+module-help = Enables Wireguard to output debug messages
+source "subsys/net/Kconfig.template.log_config.net"
+
+config NET_WIREGUARD_TXRX_DEBUG
+	bool "Debug received and sent virtual interface packets"
+	depends on NET_WIREGUARD_LOG_LEVEL_DBG
+	help
+	  Enables printing of received and sent network packets.
+	  This can produce lot of output so it is disabled by default.
+	  This prints data in the virtual interface (wg0) level.
+
+endif # WIREGUARD
