@@ -38,6 +38,8 @@ LOG_MODULE_REGISTER(wireguard, CONFIG_WIREGUARD_LOG_LEVEL);
 #define DEBUG_RX 0
 #endif
 
+static const uint8_t zero_key[WG_PUBLIC_KEY_LEN];
+
 static K_MUTEX_DEFINE(lock);
 
 static struct wg_peer peers[CONFIG_WIREGUARD_MAX_PEER];
@@ -48,6 +50,8 @@ static struct wg_context {
 	struct net_mgmt_event_callback wg_mgmt_cb;
 	struct net_if *iface; /* control interface */
 	int ifindex;          /* output network interface if set */
+	uint8_t construction_hash[WG_HASH_LEN];
+	uint8_t identifier_hash[WG_HASH_LEN];
 	bool status;
 } wg_ctx;
 
@@ -118,6 +122,21 @@ static uint16_t get_port(struct sockaddr *addr)
 	return local_port;
 }
 
+static void crypto_init(struct wg_context *ctx)
+{
+	wireguard_blake2s_ctx bl_ctx;
+
+	wireguard_blake2s_init(&bl_ctx, WG_HASH_LEN, NULL, 0);
+	wireguard_blake2s_update(&bl_ctx, CONSTRUCTION, sizeof(CONSTRUCTION));
+	wireguard_blake2s_final(&bt_ctx, ctx->construction_hash);
+
+	wireguard_blake2s_init(&bl_ctx, WIREGUARD_HASH_LEN, NULL, 0);
+	wireguard_blake2s_update(&bl_ctx, ctx->construction_hash,
+				 sizeof(ctx->construction_hash));
+	wireguard_blake2s_update(&bl_ctx, IDENTIFIER, sizeof(IDENTIFIER));
+	wireguard_blake2s_final(&bl_ctx, ctx->identifier_hash);
+}
+
 int wireguard_init(void)
 {
 	struct sockaddr local_addr = { 0 };
@@ -149,6 +168,8 @@ int wireguard_init(void)
 
 		ctx->ifindex = ret;
 	}
+
+	crypto_init(ctx);
 
 	if (IS_ENABLED(CONFIG_NET_IPV6)) {
 		local_addr.sa_family = AF_INET6;

@@ -32,6 +32,17 @@
 
 #define WG_MTU 1420U
 
+/* 5.4 Messages */
+/* Constants */
+/* The UTF-8 string literal "Noise_IKpsk2_25519_ChaChaPoly_BLAKE2s", 37 bytes of output */
+static const uint8_t CONSTRUCTION[37] = "Noise_IKpsk2_25519_ChaChaPoly_BLAKE2s";
+/* The UTF-8 string literal "WireGuard v1 zx2c4 Jason@zx2c4.com", 34 bytes of output */
+static const uint8_t IDENTIFIER[34] = "WireGuard v1 zx2c4 Jason@zx2c4.com";
+/* Label-Mac1 The UTF-8 string literal "mac1----", 8 bytes of output. */
+static const uint8_t LABEL_MAC1[8] = "mac1----";
+/* Label-Cookie The UTF-8 string literal "cookie--", 8 bytes of output */
+static const uint8_t LABEL_COOKIE[8] = "cookie--";
+
 /* 5.4.2 First Message: Initiator to Responder */
 struct message_handshake_initiation {
 	uint8_t type;
