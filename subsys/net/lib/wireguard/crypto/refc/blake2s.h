@@ -1,5 +1,6 @@
 // Taken from RFC7693 - https://tools.ietf.org/html/rfc7693
 // BLAKE2s Hashing Context and API Prototypes
+/* SPDX-License-Identifier: BSD-3-Clause */
 #ifndef _BLAKE2S_H
 #define _BLAKE2S_H
 

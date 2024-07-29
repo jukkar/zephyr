@@ -1,5 +1,7 @@
 // Taken from RFC7693 - https://tools.ietf.org/html/rfc7693
 
+/* SPDX-License-Identifier: BSD-3-Clause */
+
 #include "blake2s.h"
 #include "../crypto.h"
 

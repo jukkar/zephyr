@@ -1,4 +1,7 @@
 // Taken from https://github.com/floodyberry/poly1305-donna - public domain or MIT
+
+/* SPDX-License-Identifier: MIT */
+
 #ifndef POLY1305_DONNA_H
 #define POLY1305_DONNA_H
 

@@ -1,5 +1,7 @@
 // Taken from https://github.com/floodyberry/poly1305-donna - public domain or MIT
 
+/* SPDX-License-Identifier: MIT */
+
 #include "poly1305-donna.h"
 #include "poly1305-donna-32.h"
 
