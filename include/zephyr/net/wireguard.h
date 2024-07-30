@@ -30,19 +30,19 @@ extern "C" {
 
 /** Default Wireguard VPN service port */
 #if defined(CONFIG_WIREGUARD_SERVER)
-#define WG_DEFAULT_SERVICE_PORT CONFIG_WIREGUARD_SERVER_PORT
+#define WIREGUARD_DEFAULT_SERVICE_PORT CONFIG_WIREGUARD_SERVER_PORT
 #else
-#define WG_DEFAULT_SERVICE_PORT 51820
+#define WIREGUARD_DEFAULT_SERVICE_PORT 51820
 #endif
 
 #if defined(CONFIG_WIREGUARD)
-#define WG_INTERFACE CONFIG_WIREGUARD_INTERFACE
+#define WIREGUARD_INTERFACE CONFIG_WIREGUARD_INTERFACE
 #else
-#define WG_INTERFACE ""
+#define WIREGUARD_INTERFACE ""
 #endif
 
 /** Timestamp length (64-bit seconds and 32-bit nanoseconds) */
-#define WG_TIMESTAMP_LEN (sizeof(uint64_t) + sizeof(uint32_t))
+#define WIREGUARD_TIMESTAMP_LEN (sizeof(uint64_t) + sizeof(uint32_t))
 
 /**
  * @brief Wireguard peer configuration information.
@@ -52,13 +52,17 @@ extern "C" {
 struct wireguard_peer_config {
 	/** Public key in base64 format */
 	const char *public_key;
+
+	/** Optional pre-shared key (32 bytes), set to NULL if not to be used */
+	const uint8_t *preshared_key;
+
 	/** What is the largest timestamp we have seen during handshake in order
 	 * to avoid replays.
 	 */
-	uint8_t timestamp[WG_TIMESTAMP_LEN];
+	uint8_t timestamp[WIREGUARD_TIMESTAMP_LEN];
 
 	/** Allowed IP address */
-	struct sockaddr allowed_ips;
+	struct sockaddr allowed_ip;
 	/** Netmask (for IPv4) or Prefix (for IPv6) length */
 	uint8_t mask_len;
 

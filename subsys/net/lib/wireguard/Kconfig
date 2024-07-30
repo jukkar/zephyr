@@ -24,6 +24,13 @@ config WIREGUARD_MAX_PEER
 	help
 	  How many Wireguard VPN connections are possible.
 
+config WIREGUARD_MAX_SRC_IPS
+	int "Maximum number of peer source IP addresses"
+	default 2
+	range 1 256
+	help
+	  How many IP addresses are allowed / peer.
+
 config WIREGUARD_INTERFACE
 	string "Network interface to use"
 	help
@@ -48,9 +55,9 @@ module-str = Log level for Wireguard VPN service
 module-help = Enables Wireguard to output debug messages
 source "subsys/net/Kconfig.template.log_config.net"
 
-config NET_WIREGUARD_TXRX_DEBUG
+config WIREGUARD_TXRX_DEBUG
 	bool "Debug received and sent virtual interface packets"
-	depends on NET_WIREGUARD_LOG_LEVEL_DBG
+	depends on WIREGUARD_LOG_LEVEL_DBG
 	help
 	  Enables printing of received and sent network packets.
 	  This can produce lot of output so it is disabled by default.

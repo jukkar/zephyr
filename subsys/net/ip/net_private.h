@@ -80,7 +80,7 @@ static inline void socket_service_init(void) { }
 #if defined(CONFIG_WIREGUARD)
 extern int wireguard_init(void);
 #else
-static inline int wireguard_init(void) { }
+static inline int wireguard_init(void) { return -ENOTSUP; }
 #endif
 
 #if defined(CONFIG_NET_NATIVE) || defined(CONFIG_NET_OFFLOAD)

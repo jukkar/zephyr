@@ -15,7 +15,10 @@ LOG_MODULE_DECLARE(net_shell);
 #include <zephyr/net/wireguard.h>
 
 #include "net_shell_private.h"
+
+#if defined(CONFIG_WIREGUARD)
 #include "wireguard/wg_internal.h"
+#endif
 
 #if defined(CONFIG_WIREGUARD)
 static void wg_peer_cb(struct wg_peer *peer, void *user_data)
@@ -77,6 +80,7 @@ static int cmd_net_wg(const struct shell *sh, size_t argc, char *argv[])
 	return 0;
 }
 
+#if defined(CONFIG_WIREGUARD)
 static int parse_addr_and_len(const struct shell *sh, char *opt,
 			      struct sockaddr *addr, int *len)
 {
@@ -155,6 +159,7 @@ static int parse_peer_add_args_to_params(const struct shell *sh, int argc,
 
 	return 0;
 }
+#endif /* CONFIG_WIREGUARD */
 
 static int cmd_wg_add(const struct shell *sh, size_t argc, char *argv[])
 {
@@ -195,6 +200,7 @@ static int cmd_wg_add(const struct shell *sh, size_t argc, char *argv[])
 	return 0;
 }
 
+#if defined(CONFIG_WIREGUARD)
 static int parse_peer_del_args_to_params(const struct shell *sh, int argc,
 					 char *argv[], int *id)
 {
@@ -234,6 +240,7 @@ static int parse_peer_del_args_to_params(const struct shell *sh, int argc,
 
 	return 0;
 }
+#endif /* CONFIG_WIREGUARD */
 
 static int cmd_wg_del(const struct shell *sh, size_t argc, char *argv[])
 {

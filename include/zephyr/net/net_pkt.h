@@ -102,7 +102,12 @@ struct net_pkt {
 #endif
 
 #if defined(CONFIG_WIREGUARD)
-	struct net_if *wg_iface; /* Original network interface */
+	/* Original network interface */
+	struct net_if *wg_iface;
+	/* Pointer to IP header of the encrypted pkt */
+	union net_ip_header wg_ip_hdr;
+	/* Pointer to UDP header of the encrypted pkt */
+	union net_proto_header wg_proto_hdr;
 #endif
 
 #if defined(CONFIG_NET_PKT_TIMESTAMP) || defined(CONFIG_NET_PKT_TXTIME)
@@ -392,6 +397,28 @@ static inline void net_pkt_set_wg_iface(struct net_pkt *pkt,
 					struct net_if *iface)
 {
 	pkt->wg_iface = iface;
+}
+
+static inline union net_ip_header *net_pkt_wg_ip_hdr(struct net_pkt *pkt)
+{
+	return &pkt->wg_ip_hdr;
+}
+
+static inline void net_pkt_set_wg_ip_hdr(struct net_pkt *pkt,
+					 union net_ip_header *ip_hdr)
+{
+	pkt->wg_ip_hdr = *ip_hdr;
+}
+
+static inline union net_proto_header *net_pkt_wg_udp_hdr(struct net_pkt *pkt)
+{
+	return &pkt->wg_proto_hdr;
+}
+
+static inline void net_pkt_set_wg_udp_hdr(struct net_pkt *pkt,
+					  union net_proto_header *proto_hdr)
+{
+	pkt->wg_proto_hdr = *proto_hdr;
 }
 #endif
 
