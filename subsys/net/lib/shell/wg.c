@@ -33,15 +33,17 @@ static void wg_peer_cb(struct wg_peer *peer, void *user_data)
 		PR("Id   Iface %-24s\t%s\n", "Allowed IPs", "Public key");
 	}
 
-	net_addr_ntop(peer->allowed_ips.sa_family,
-		      &net_sin(&peer->allowed_ips)->sin_addr,
-		      addr, sizeof(addr));
+	ARRAY_FOR_EACH(peer->allowed_source_ips, i) {
+		net_addr_ntop(peer->allowed_source_ips[i].addr.family,
+			      &peer->allowed_source_ips[i].addr.in_addr,
+			      addr, sizeof(addr));
+		snprintk(mask, sizeof(mask), "/%d ", peer->allowed_source_ips[i].mask_len);
+		strcat(addr, mask);
+	}
 
 	(void)base64_encode(public_key, sizeof(public_key),
-			    &olen, peer->public_key, sizeof(peer->public_key));
-
-	snprintk(mask, sizeof(mask), "/%d", peer->mask_len);
-	strcat(addr, mask);
+			    &olen, peer->key.public_key,
+			    sizeof(peer->key.public_key));
 
 	PR("[%2d] %d     %-24s\t%s\n",
 	   peer->id, net_if_get_by_iface(peer->iface), addr, public_key);
@@ -139,7 +141,7 @@ static int parse_peer_add_args_to_params(const struct shell *sh, int argc,
 				return -ENOEXEC;
 			}
 
-			memcpy(&peer->allowed_ips, &addr, sizeof(peer->allowed_ips));
+			memcpy(&peer->allowed_ip, &addr, sizeof(peer->allowed_ip));
 			peer->mask_len = len;
 			break;
 		}
