@@ -1332,12 +1332,35 @@ void net_if_start_dad(struct net_if *iface)
 		goto out;
 	}
 
-	net_ipv6_addr_create_iid(&addr, net_if_get_link_addr(iface));
+	if (ipv6->iid == NULL) {
+		ret = net_ipv6_addr_generate_iid(iface, NULL, NULL, 0U, 0,
+						 &addr,
+						 net_if_get_link_addr(iface));
+		if (ret < 0) {
+			NET_WARN("IPv6 IID generation issue (dcount %d) (%d)",
+				 0, ret);
+		}
 
-	ifaddr = net_if_ipv6_addr_add(iface, &addr, NET_ADDR_AUTOCONF, 0);
-	if (!ifaddr) {
-		NET_ERR("Cannot add %s address to interface %p, DAD fails",
-			net_sprint_ipv6_addr(&addr), iface);
+		ifaddr = net_if_ipv6_addr_add(iface, &addr, NET_ADDR_AUTOCONF, 0);
+		if (!ifaddr) {
+			NET_ERR("Cannot add %s address to interface %p, DAD fails",
+				net_sprint_ipv6_addr(&addr), iface);
+			goto out;
+		}
+
+		ipv6->iid = ifaddr;
+	} else {
+		ret = net_ipv6_addr_generate_iid(iface, NULL, NULL, 0U,
+						 ipv6->iid->dad_count,
+						 &addr,
+						 net_if_get_link_addr(iface));
+		if (ret < 0) {
+			NET_WARN("IPv6 IID generation issue (dcount %d) (%d)",
+				 ipv6->iid->dad_count, ret);
+			goto out;
+		}
+
+		ifaddr = ipv6->iid;
 	}
 
 	/* Start DAD for all the addresses that were added earlier when
@@ -3216,16 +3239,15 @@ static void iface_ipv6_start(struct net_if *iface)
 
 static void iface_ipv6_stop(struct net_if *iface)
 {
-	struct in6_addr addr = { };
-
 	if (!net_if_flag_is_set(iface, NET_IF_IPV6) ||
 	    net_if_flag_is_set(iface, NET_IF_IPV6_NO_ND)) {
 		return;
 	}
 
-	net_ipv6_addr_create_iid(&addr, net_if_get_link_addr(iface));
-
-	(void)net_if_ipv6_addr_rm(iface, &addr);
+	if (iface->config.ip.ipv6->iid != NULL) {
+		(void)net_if_ipv6_addr_rm(iface,
+					  &iface->config.ip.ipv6->iid->address.in6_addr);
+	}
 }
 
 static void iface_ipv6_init(int if_count)

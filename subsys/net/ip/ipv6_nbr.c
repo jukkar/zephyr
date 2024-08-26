@@ -2236,13 +2236,19 @@ static inline void handle_prefix_autonomous(struct net_pkt *pkt,
 	struct net_if *iface = net_pkt_iface(pkt);
 	struct in6_addr addr = { };
 	struct net_if_addr *ifaddr;
+	int ret;
 
-	/* Create IPv6 address using the given prefix and iid. We first
-	 * setup link local address, and then copy prefix over first 8
-	 * bytes of that address.
+	/* Create IPv6 address using the given prefix and iid.
 	 */
-	net_ipv6_addr_create_iid(&addr, net_if_get_link_addr(iface));
-	memcpy(&addr, prefix_info->prefix, sizeof(struct in6_addr) / 2);
+	ret = net_ipv6_addr_generate_iid(iface,
+					 (struct in6_addr *)prefix_info->prefix,
+					 NULL, 0U,
+					 0,
+					 &addr,
+					 net_if_get_link_addr(iface));
+	if (ret < 0) {
+		NET_WARN("IPv6 IID generation issue (%d)", ret);
+	}
 
 	ifaddr = net_if_ipv6_addr_lookup(&addr, NULL);
 	if (ifaddr && ifaddr->addr_type == NET_ADDR_AUTOCONF) {

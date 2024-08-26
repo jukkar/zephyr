@@ -313,6 +313,9 @@ struct net_offload;
 
 /** IPv6 configuration */
 struct net_if_ipv6 {
+	/** Interface Identifier (IID) address */
+	struct net_if_addr *iid;
+
 	/** Unicast IP addresses */
 	struct net_if_addr unicast[NET_IF_MAX_IPV6_ADDR];
 
