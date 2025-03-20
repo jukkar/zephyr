@@ -186,6 +186,10 @@ Networking
   more generic :c:enumerator:`TLS_CREDENTIAL_PUBLIC_CERTIFICATE` to better
   reflect the purpose of this credential type.
 
+* The enum ``ETHERNET_DSA_MASTER_PORT`` and ``ETHERNET_DSA_SLAVE_PORT`` in
+  :zephyr_file:`include/zephyr/net/ethernet.h` have been renamed
+  to ``ETHERNET_DSA_CONDUIT_PORT`` and ``ETHERNET_DSA_USER_PORT``.
+
 SPI
 ===
 
