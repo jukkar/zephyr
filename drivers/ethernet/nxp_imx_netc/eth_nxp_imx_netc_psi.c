@@ -55,7 +55,14 @@ static void netc_eth_iface_init(struct net_if *iface)
 	const struct device *dev = net_if_get_device(iface);
 	struct netc_eth_data *data = dev->data;
 	const struct netc_eth_config *cfg = dev->config;
+	struct ethernet_context *eth_ctx = net_if_l2_data(iface);
 	status_t result;
+
+	/* No need to enable IPv4/IPv6 if this is a conduit port */
+	if (eth_ctx->dsa_port == DSA_CONDUIT_PORT) {
+		net_if_flag_clear(iface, NET_IF_IPV4);
+		net_if_flag_clear(iface, NET_IF_IPV6);
+	}
 
 	/*
 	 * For VLAN, this value is only used to get the correct L2 driver.
