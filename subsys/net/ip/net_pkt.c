@@ -140,9 +140,86 @@ NET_BUF_POOL_FIXED_DEFINE(tx_bufs, CONFIG_NET_BUF_TX_COUNT, CONFIG_NET_BUF_DATA_
 
 #else /* !CONFIG_NET_BUF_FIXED_DATA_SIZE */
 
-NET_BUF_POOL_VAR_DEFINE(rx_bufs, CONFIG_NET_BUF_RX_COUNT, CONFIG_NET_PKT_BUF_RX_DATA_POOL_SIZE,
-			CONFIG_NET_PKT_BUF_USER_DATA_SIZE, NULL);
+#if CONFIG_NET_PKT_BUF_TX_DATA_ALLOC_ALIGN_LEN > 0
+
+static uint8_t *generic_data_ref(struct net_buf *buf, uint8_t *data)
+{
+	uint8_t *ref_count;
+
+	ref_count = data - sizeof(void *);
+	(*ref_count)++;
+
+	return data;
+}
+
+static uint8_t *mem_pool_data_alloc_align(struct net_buf *buf, size_t *size,
+					  k_timeout_t timeout)
+{
+	struct net_buf_pool *buf_pool = net_buf_pool_get(buf->pool_id);
+	struct k_heap *pool = buf_pool->alloc->alloc_data;
+	uint8_t *ref_count;
+
+	/* Reserve extra space for a ref-count (uint8_t) */
+	void *b = k_heap_aligned_alloc(pool,
+				       CONFIG_NET_PKT_BUF_TX_DATA_ALLOC_ALIGN_LEN,
+				       sizeof(void *) +
+				       ROUND_UP(*size,
+						CONFIG_NET_PKT_BUF_TX_DATA_ALLOC_ALIGN_LEN),
+				       timeout);
+	if (b == NULL) {
+		return NULL;
+	}
+
+	ref_count = (uint8_t *)b;
+	*ref_count = 1U;
+
+	/* Return pointer to the byte following the ref count */
+	return ref_count + sizeof(void *);
+}
+
+static void mem_pool_data_unref(struct net_buf *buf, uint8_t *data)
+{
+	struct net_buf_pool *buf_pool = net_buf_pool_get(buf->pool_id);
+	struct k_heap *pool = buf_pool->alloc->alloc_data;
+	uint8_t *ref_count;
+
+	ref_count = data - sizeof(void *);
+	if (--(*ref_count)) {
+		return;
+	}
+
+	/* Need to copy to local variable due to alignment */
+	k_heap_free(pool, ref_count);
+}
+
+static const struct net_buf_data_cb net_buf_align_var_cb = {
+	.alloc = mem_pool_data_alloc_align,
+	.ref   = generic_data_ref,
+	.unref = mem_pool_data_unref,
+};
+
+#define NET_BUF_POOL_VAR_ALIGN_DEFINE(_name, _count, _data_size, _ud_size, _destroy) \
+	_NET_BUF_ARRAY_DEFINE(_name, _count, _ud_size);                        \
+	K_HEAP_DEFINE(net_buf_mem_pool_##_name, _data_size);                   \
+	static const struct net_buf_data_alloc net_buf_data_alloc_##_name = {  \
+		.cb = &net_buf_align_var_cb,				       \
+		.alloc_data = &net_buf_mem_pool_##_name,                       \
+		.max_alloc_size = 0,                                           \
+	};                                                                     \
+	static STRUCT_SECTION_ITERABLE(net_buf_pool, _name) =                  \
+		NET_BUF_POOL_INITIALIZER(_name, &net_buf_data_alloc_##_name,   \
+					 _net_buf_##_name, _count, _ud_size,   \
+					 _destroy)
+
+NET_BUF_POOL_VAR_ALIGN_DEFINE(tx_bufs, CONFIG_NET_BUF_TX_COUNT,
+			      CONFIG_NET_PKT_BUF_TX_DATA_POOL_SIZE,
+			      CONFIG_NET_PKT_BUF_USER_DATA_SIZE, NULL);
+#else
 NET_BUF_POOL_VAR_DEFINE(tx_bufs, CONFIG_NET_BUF_TX_COUNT, CONFIG_NET_PKT_BUF_TX_DATA_POOL_SIZE,
+			CONFIG_NET_PKT_BUF_USER_DATA_SIZE, NULL);
+#endif /* CONFIG_NET_PKT_BUF_RX_DATA_ALLOC_ALIGN_LEN > 0 */
+
+NET_BUF_POOL_VAR_DEFINE(rx_bufs, CONFIG_NET_BUF_RX_COUNT, CONFIG_NET_PKT_BUF_RX_DATA_POOL_SIZE,
 			CONFIG_NET_PKT_BUF_USER_DATA_SIZE, NULL);
 
 #endif /* CONFIG_NET_BUF_FIXED_DATA_SIZE */
