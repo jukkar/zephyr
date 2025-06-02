@@ -873,6 +873,7 @@ static void modem_cellular_run_init_script_event_handler(struct modem_cellular_d
 {
 	const struct modem_cellular_config *config =
 		(const struct modem_cellular_config *)data->dev->config;
+	int err;
 
 	switch (evt) {
 	case MODEM_CELLULAR_EVENT_BUS_OPENED:
@@ -881,8 +882,12 @@ static void modem_cellular_run_init_script_event_handler(struct modem_cellular_d
 		break;
 
 	case MODEM_CELLULAR_EVENT_SCRIPT_SUCCESS:
-		net_if_set_link_addr(modem_ppp_get_iface(data->ppp), data->imei,
-				     ARRAY_SIZE(data->imei), NET_LINK_UNKNOWN);
+		err = net_if_set_link_addr(modem_ppp_get_iface(data->ppp), data->imei,
+				     ARRAY_SIZE(data->imei),
+				     NET_LINK_UNKNOWN);
+		if (err) {
+			LOG_WRN("Failed to set link address on PPP interface (%d)", err);
+		}
 
 		modem_chat_release(&data->chat);
 		modem_pipe_attach(data->uart_pipe, modem_cellular_bus_pipe_handler, data);
