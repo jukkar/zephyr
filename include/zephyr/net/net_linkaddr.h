@@ -30,7 +30,9 @@ extern "C" {
  */
 
 /** Maximum length of the link address */
-#if defined(CONFIG_MODEM_CELLULAR)
+#if defined(CONFIG_NET_TEST_LINK_ADDR)
+#define NET_LINK_ADDR_MAX_LENGTH CONFIG_NET_TEST_LINK_ADDR_LEN
+#elif defined(CONFIG_MODEM_CELLULAR)
 #define NET_LINK_ADDR_MAX_LENGTH 16
 #elif defined(CONFIG_NET_L2_PHY_IEEE802154) || defined(CONFIG_NET_L2_PPP)
 #define NET_LINK_ADDR_MAX_LENGTH 8

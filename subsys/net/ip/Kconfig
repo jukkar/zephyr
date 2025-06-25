@@ -1101,6 +1101,17 @@ config NET_DISABLE_ICMP_DESTINATION_UNREACHABLE
 	  Suppress the generation of ICMP destination unreachable errors
 	  when ports that are not in a listening state receive packets.
 
+config NET_TEST_LINK_ADDR
+	bool "Allow link address testing"
+	depends on NET_TEST
+	help
+	  Allow a test case for setting up a link address length manually.
+
+config NET_TEST_LINK_ADDR_LEN
+	int "Max link address length"
+	default 16
+	depends on NET_TEST_LINK_ADDR
+
 source "subsys/net/ip/Kconfig.stack"
 
 source "subsys/net/ip/Kconfig.mgmt"

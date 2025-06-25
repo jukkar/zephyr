@@ -30,3 +30,7 @@ tests:
       - CONFIG_NET_IPV6_PE_FILTER_PREFIX_COUNT=2
       - CONFIG_NET_IF_UNICAST_IPV6_ADDR_COUNT=9
       - CONFIG_NET_IF_MCAST_IPV6_ADDR_COUNT=7
+  net.ipv6.large_linkaddr_len:
+    extra_configs:
+      - CONFIG_NET_TEST_LINK_ADDR_LEN=16
+      - CONFIG_NET_TEST_LINK_ADDR=y
