@@ -1038,7 +1038,7 @@ const char *net_ipaddr_parse_mask(const char *str, size_t str_len,
 	int parsed_mask_len = -1;
 	bool ret = false;
 
-	if (str == NULL || str_len == 0 || addr == NULL || mask_len == NULL) {
+	if (str == NULL || str_len == 0 || addr == NULL) {
 		return NULL;
 	}
 
@@ -1069,7 +1069,10 @@ const char *net_ipaddr_parse_mask(const char *str, size_t str_len,
 		}
 
 		str_len = mask_ptr - str;
-		*mask_len = (uint8_t)parsed_mask_len;
+
+		if (mask_len != NULL) {
+			*mask_len = (uint8_t)parsed_mask_len;
+		}
 	}
 
 #if defined(CONFIG_NET_IPV4) && defined(CONFIG_NET_IPV6)
@@ -1088,7 +1091,7 @@ const char *net_ipaddr_parse_mask(const char *str, size_t str_len,
 		return NULL;
 	}
 
-	if (parsed_mask_len < 0) {
+	if (parsed_mask_len < 0 && mask_len != NULL) {
 		if (addr->sa_family == NET_AF_INET) {
 			*mask_len = 32;
 		} else if (addr->sa_family == NET_AF_INET6) {
