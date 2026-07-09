@@ -16,6 +16,8 @@ properties:
     properties:
       config_format_hash:
         type: string
+        # SHA-1 hex digest (40 chars) + NUL terminator
+        maxLength: 41
         description: Hash for the configuration data (internal)
       interfaces:
         description: List of network interfaces
@@ -33,6 +35,8 @@ properties:
             device_name:
               description: Device name to bind to
               type: string
+              # Z_DEVICE_MAX_NAME_LEN
+              maxLength: 48
             set_name:
               description: New name of the network interface
               type: string

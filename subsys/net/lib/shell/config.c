@@ -57,7 +57,7 @@ static int cmd_net_config(const struct shell *sh, size_t argc, char *argv[])
 			   iface_cfg->name);
 		}
 
-		if (iface_cfg->device_name != NULL) {
+		if (iface_cfg->device_name[0] != '\0') {
 			PR("\t%sdevice_name %s\n",
 			   CHANGED(my_cfg, iface_cfg, device_name),
 			   iface_cfg->device_name);
@@ -597,7 +597,7 @@ static int cmd_net_config_set(const struct shell *sh, size_t argc, char *argv[])
 	iface_cfg = &config.interfaces[iface_idx - 1];
 
 	CHECK_BASE_STR_OPTION(name, value, iface_cfg);
-	CHECK_BASE_OPTION(device_name, value, iface_cfg);
+	CHECK_BASE_STR_OPTION(device_name, value, iface_cfg);
 	CHECK_BASE_STR_OPTION(set_name, value, iface_cfg);
 	CHECK_BASE_INT_OPTION(bind_to, value, iface_cfg);
 	CHECK_BASE_BOOL_OPTION(set_default, value, iface_cfg);

@@ -557,8 +557,8 @@ static int get_ifindex(const struct net_cfg_interfaces *cfg)
 	 * are missing, then the bind-to field will tell which
 	 * interface to use.
 	 */
-	zassert_false(cfg->name == NULL &&
-		      cfg->device_name == NULL &&
+	zassert_false(cfg->name[0] == '\0' &&
+		      cfg->device_name[0] == '\0' &&
 		      cfg->bind_to == 0,
 		      "Cannot find the interface.");
 
@@ -572,7 +572,7 @@ static int get_ifindex(const struct net_cfg_interfaces *cfg)
 		}
 	}
 
-	if (cfg->device_name != NULL) {
+	if (cfg->device_name[0] != '\0') {
 		const struct device *dev;
 		struct net_if *iface;
 

@@ -1160,7 +1160,7 @@ int net_config_get(struct networking *cfg)
 	/* Verify that the yaml schema file is not changed between what is in
 	 * use and what was used when the user modified the configuration.
 	 */
-	if (net_init_config_user.config_format_hash != NULL &&
+	if (net_init_config_user.config_format_hash[0] != '\0' &&
 	    strncmp(config->config_format_hash,
 		    net_init_config_user.config_format_hash,
 		    sizeof(config->config_format_hash) - 1) != 0) {
@@ -1179,7 +1179,7 @@ int net_config_get(struct networking *cfg)
 
 		UPDATE_IFACE_VAL(bind_to);
 		UPDATE_IFACE_STR_VAL(name);
-		UPDATE_IFACE_VAL(device_name);
+		UPDATE_IFACE_STR_VAL(device_name);
 		UPDATE_IFACE_STR_VAL(set_name);
 		UPDATE_IFACE_VAL(set_default);
 
@@ -1653,7 +1653,7 @@ int net_config_set(const struct networking *cfg)
 
 		SET_IFACE_VAL(bind_to);
 		SET_IFACE_STR_VAL(name);
-		SET_IFACE_VAL(device_name);
+		SET_IFACE_STR_VAL(device_name);
 		SET_IFACE_STR_VAL(set_name);
 		SET_IFACE_VAL(set_default);
 
@@ -1744,6 +1744,13 @@ int net_config_set(const struct networking *cfg)
 		SET_SNTP_STR_VAL(server);
 		SET_SNTP_VAL(timeout);
 	}
+
+	/* Store the current configuration format hash so that a later firmware
+	 * with a changed configuration format can detect the mismatch and
+	 * reject the stale user configuration instead of applying it.
+	 */
+	COPY_CONFIG_STR(net_init_config_user.config_format_hash,
+			config->config_format_hash);
 
 	ret = settings_runtime_set(SETTINGS_SUBTREE_NET_CONFIG "/user",
 				   &net_init_config_user, sizeof(net_init_config_user));
